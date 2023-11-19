@@ -117,6 +117,9 @@ import Data.Word (Word8)
 type QueryItem = (B.ByteString, Maybe B.ByteString)
 
 -- | A sequence of 'QueryItem's.
+--
+-- General form: @a=b&c=d@, but if for example the value of @a@ is @Nothing@
+-- instead of @Just "b"@, it becomes @a&c=d@.
 type Query = [QueryItem]
 
 -- | Like Query, but with 'Text' instead of 'B.ByteString' (UTF8-encoded).
