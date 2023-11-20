@@ -154,10 +154,10 @@ parseQueryReplacePlus replacePlus bs = parseQueryString' $ dropQuestion bs
         case B.uncons q of
             Just (63, q') -> q'
             _ -> q
-    parseQueryString' q | B.null q = []
-    parseQueryString' q =
-        let (x, xs) = breakDiscard queryStringSeparators q
-         in parsePair x : parseQueryString' xs
+    parseQueryString q | B.null q = []
+    parseQueryString q =
+        let (x, xs) = breakDiscard q
+         in parsePair x : parseQueryString xs
       where
         parsePair x =
             let (k, v) = B.break (== 61) x -- equal sign
@@ -167,14 +167,11 @@ parseQueryReplacePlus replacePlus bs = parseQueryString' $ dropQuestion bs
                         _ -> Nothing
              in (urlDecode replacePlus k, v'')
 
-queryStringSeparators :: B.ByteString
-queryStringSeparators = B.pack [38,59] -- ampersand, semicolon
-
 -- | Break the second bytestring at the first occurrence of any bytes from
 -- the first bytestring, discarding that byte.
-breakDiscard :: B.ByteString -> B.ByteString -> (B.ByteString, B.ByteString)
-breakDiscard seps s =
-    let (x, y) = B.break (`B.elem` seps) s
+breakDiscard :: B.ByteString -> (B.ByteString, B.ByteString)
+breakDiscard s =
+    let (x, y) = B.break (\w8 -> w8 == 38 || w8 == 59) s
      in (x, B.drop 1 y)
 
 -- | Parse 'SimpleQuery' from a 'ByteString'.

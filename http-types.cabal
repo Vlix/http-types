@@ -56,3 +56,19 @@ Test-Suite doctests
   type:                exitcode-stdio-1.0
   ghc-options:         -threaded -Wall
   build-depends:       base, doctest >= 0.9.3
+
+Benchmark bench
+  main-is:             Bench.hs
+  hs-source-dirs:      bench .
+  type:                exitcode-stdio-1.0
+  other-modules:       Network.HTTP.Types.URI
+                       Network.HTTP.Types.URI.Experimental
+  build-depends:       base,
+                       bytestring,
+                       deepseq,
+                       QuickCheck,
+                       tasty-bench,
+                       text
+  ghc-options:         -threaded -Wall "-with-rtsopts=-A32m"
+  if impl(ghc >= 8.6)
+    ghc-options: -fproc-alignment=64
