@@ -61,7 +61,7 @@ import           Data.ByteString.Char8          () {-IsString-}
 type QueryItem = (B.ByteString, Maybe B.ByteString)
 
 -- | Query.
--- 
+--
 -- General form: @a=b&c=d@, but if the value is Nothing, it becomes
 -- @a&c=d@.
 type Query = [QueryItem]
@@ -133,11 +133,11 @@ renderSimpleQuery useQuestionMark = renderQuery useQuestionMark . simpleQueryToQ
 
 -- | Split out the query string into a list of keys and values. A few
 -- importants points:
--- 
+--
 -- * The result returned is still bytestrings, since we perform no character
 -- decoding here. Most likely, you will want to use UTF-8 decoding, but this is
 -- left to the user of the library.
--- 
+--
 -- * Percent decoding errors are ignored. In particular, @"%Q"@ will be output as
 -- @"%Q"@.
 --
@@ -147,8 +147,12 @@ parseQuery = parseQueryReplacePlus True
 
 -- | Same functionality as 'parseQuery' with the option to decode @\'+\'@ characters to @\' \'@
 -- or preserve @\'+\'@
+--
+-- Breaks up query parts separated by '&' or ';'.
+-- e.g. @key=val&key2=val2;key3=val3@
 parseQueryReplacePlus :: Bool -> B.ByteString -> Query
-parseQueryReplacePlus replacePlus bs = parseQueryString' $ dropQuestion bs
+parseQueryReplacePlus replacePlus bs =
+    parseQueryString' $ dropQuestion bs
   where
     dropQuestion q =
         case B.uncons q of
@@ -245,26 +249,26 @@ urlDecode replacePlus z = fst $ B.unfoldrN (B.length z) go z
     combine a b = shiftL a 4 .|. b
 
 -- | Encodes a list of path segments into a valid URL fragment.
--- 
+--
 -- This function takes the following three steps:
--- 
+--
 -- * UTF-8 encodes the characters.
--- 
+--
 -- * Performs percent encoding on all unreserved characters, as well as @\:\@\=\+\$@,
--- 
+--
 -- * Prepends each segment with a slash.
--- 
+--
 -- For example:
--- 
+--
 -- > encodePathSegments [\"foo\", \"bar\", \"baz\"]
 -- \"\/foo\/bar\/baz\"
--- 
+--
 -- > encodePathSegments [\"foo bar\", \"baz\/bin\"]
 -- \"\/foo\%20bar\/baz\%2Fbin\"
--- 
+--
 -- > encodePathSegments [\"שלום\"]
 -- \"\/%D7%A9%D7%9C%D7%95%D7%9D\"
--- 
+--
 -- Huge thanks to Jeremy Shaw who created the original implementation of this
 -- function in web-routes and did such thorough research to determine all
 -- correct escaping procedures.
@@ -350,7 +354,7 @@ data EscapeItem = QE B.ByteString -- will be URL encoded
 type PartialEscapeQueryItem = (B.ByteString, [EscapeItem])
 
 -- | Query with some chars that should not be escaped.
--- 
+--
 -- General form: @a=b&c=d:e+f&g=h@
 type PartialEscapeQuery = [PartialEscapeQueryItem]
 
@@ -377,8 +381,7 @@ renderQueryBuilderPartialEscape qmark' (p:ps) = mconcat
                      , urlEncodeBuilder True k
                      , case mv of
                          [] -> mempty
-                         vs -> equal `mappend` (mconcat (map encode vs))
+                         vs -> equal `mappend` mconcat (map encode vs)
                      ]
     encode (QE v) = urlEncodeBuilder True v
     encode (QN v) = B.byteString v
-
