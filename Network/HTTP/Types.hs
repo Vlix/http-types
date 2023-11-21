@@ -31,6 +31,9 @@ module Network.HTTP.Types (
     http10,
     http11,
     http20,
+    http30,
+    parseHttpVersion,
+    renderHttpVersion,
 
     -- * Status
 
