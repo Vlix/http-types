@@ -126,6 +126,7 @@ module Network.HTTP.Types.Status (
 
 import Data.ByteString as B (ByteString, empty)
 import Data.Data (Data)
+import Data.Function (on)
 import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 
@@ -166,11 +167,11 @@ data Status = Status
 
 -- | A 'Status' is equal to another 'Status' if the status codes are equal.
 instance Eq Status where
-    Status { statusCode = a } == Status { statusCode = b } = a == b
+    (==) = (==) `on` statusCode
 
 -- | 'Status'es are ordered according to their status codes only.
 instance Ord Status where
-    compare Status { statusCode = a } Status { statusCode = b } = a `compare` b
+    compare = compare `on` statusCode
 
 -- | Be advised, that when using the \"enumFrom*\" family of methods or
 -- ranges in lists, it will generate all possible status codes.
@@ -790,7 +791,7 @@ networkAuthenticationRequired511 = status511
 --
 -- @since 0.8.0
 statusIsInformational :: Status -> Bool
-statusIsInformational (Status {statusCode=code}) = code >= 100 && code < 200
+statusIsInformational = statusIs 1
 
 -- | Successful class
 --
@@ -798,7 +799,7 @@ statusIsInformational (Status {statusCode=code}) = code >= 100 && code < 200
 --
 -- @since 0.8.0
 statusIsSuccessful :: Status -> Bool
-statusIsSuccessful (Status {statusCode=code}) = code >= 200 && code < 300
+statusIsSuccessful = statusIs 2
 
 -- | Redirection class
 --
@@ -806,7 +807,7 @@ statusIsSuccessful (Status {statusCode=code}) = code >= 200 && code < 300
 --
 -- @since 0.8.0
 statusIsRedirection :: Status -> Bool
-statusIsRedirection (Status {statusCode=code}) = code >= 300 && code < 400
+statusIsRedirection = statusIs 3
 
 -- | Client Error class
 --
@@ -814,7 +815,7 @@ statusIsRedirection (Status {statusCode=code}) = code >= 300 && code < 400
 --
 -- @since 0.8.0
 statusIsClientError :: Status -> Bool
-statusIsClientError (Status {statusCode=code}) = code >= 400 && code < 500
+statusIsClientError = statusIs 4
 
 -- | Server Error class
 --
@@ -822,4 +823,7 @@ statusIsClientError (Status {statusCode=code}) = code >= 400 && code < 500
 --
 -- @since 0.8.0
 statusIsServerError :: Status -> Bool
-statusIsServerError (Status {statusCode=code}) = code >= 500 && code < 600
+statusIsServerError = statusIs 5
+
+statusIs :: Int -> Status -> Bool
+statusIs i Status{statusCode = code} = (code `div` 100) == i
