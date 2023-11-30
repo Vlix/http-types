@@ -1,4 +1,4 @@
-Cabal-version:       3.4
+Cabal-version:       3.0
 Name:                http-types
 Version:             0.12.4
 Synopsis:            Generic HTTP types for Haskell (for both client and server code).
