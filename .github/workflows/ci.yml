@@ -1,0 +1,118 @@
+name: http-types
+
+# Trigger the workflow on pull requests or a push (but only for the 'master' branch)
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+    paths:
+      - '**.hs'
+      - '**.cabal'
+      - 'stack.yaml'
+      - '.github/workflows/ci.yml'
+  push:
+    branches: [master]
+
+jobs:
+  cabal:
+    name: cabal / ghc-${{matrix.ghc}} / ${{ matrix.os }}
+    continue-on-error: ${{ matrix.ghc == '9.8.1'}}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macOS-latest
+        cabal: ["latest"]
+        ghc:
+          - "8.10.7"
+          - "9.0.2"
+          - "9.2.8"
+          - "9.4.8"
+          - "9.6.3"
+          - "9.8.1"
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: haskell-actions/setup@v2
+      id: setup-haskell-cabal
+      name: Setup Haskell
+      with:
+        ghc-version: ${{ matrix.ghc }}
+        cabal-version: ${{ matrix.cabal }}
+        cabal-update: true
+
+    - uses: actions/cache@v3
+      name: Cache cabal-store
+      with:
+        path: ${{ steps.setup-haskell-cabal.outputs.cabal-store }}
+        key: ${{ runner.os }}-${{ matrix.ghc }}-cabal
+
+    - name: Build
+      run: |
+        cabal build all --enable-tests --enable-benchmarks --write-ghc-environment-files=always --ghc-option='-Wall'
+    - name: Test
+      run: |
+        cabal test test:spec --enable-tests --ghc-option='-Wall'
+    - name: Test Docs
+      run: |
+        cabal exec -- cabal test test:doctests --enable-tests --ghc-option='-Wall'
+    # # We probably want to add benchmarks at some point, just to make sure
+    # # functions don't regress in performance too much?
+    # - name: Bench
+    #   run: |
+    #     cabal bench --enable-benchmarks
+  stack:
+    name: stack ${{ matrix.resolver }}
+    runs-on: ubuntu-latest
+    # This makes the CI jobs not all be cancelled if nightly fails to build.
+    # However, if nightly fails to build, CI still gets a red X in the GitHub UI.
+    # Ideally we want CI as a whole to pass even if nightly fails.
+    # There doesn't appear to be a way to work around this for now.
+    #
+    # When some sort of `allow-failure` functionality is available in GitHub
+    # actions, we should switch to it:
+    # https://github.com/actions/toolkit/issues/399
+    continue-on-error: ${{ matrix.resolver == '--resolver nightly' }}
+    strategy:
+      matrix:
+        stack: ["latest"]
+        resolver:
+          - "--resolver lts-18"  # GHC 8.10.7
+          - "--resolver lts-19 --stack-yaml=stack-lts-19.yaml"  # GHC 9.0.2
+          - "--resolver lts-20"  # GHC 9.2.8
+          - "--resolver lts-21"  # GHC 9.4.8
+          - "--resolver nightly" # GHC 9.6.3
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: haskell-actions/setup@v2
+      name: Setup Haskell Stack
+      with:
+        stack-version: ${{ matrix.stack }}
+        enable-stack: true
+
+    - uses: actions/cache@v3
+      name: Cache ~/.stack
+      with:
+        path: ${{ steps.setup-haskell-cabal.outputs.stack-root }}
+        key: ${{ runner.os }}-${{ matrix.resolver }}-stack
+
+    - name: Build
+      run: |
+        stack build ${{ matrix.resolver }} --test --bench --no-run-tests --no-run-benchmarks --no-rerun-tests --ghc-options='-Wall'
+    - name: Test
+      run: |
+        stack test http-types:test:spec ${{ matrix.resolver }}
+    - name: Test Docs
+      run: |
+        stack test http-types:test:doctests ${{ matrix.resolver }}
+    # # We probably want to add benchmarks at some point, just to make sure
+    # # functions don't regress in performance too much?
+    # - name: Bench
+    #   run: |
+    #     stack bench ${{ matrix.resolver }}

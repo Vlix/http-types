@@ -99,6 +99,15 @@ import Data.Text.Encoding (decodeUtf8With, encodeUtf8)
 import Data.Text.Encoding.Error (lenientDecode)
 import Data.Word (Word8)
 
+-- This section is needed to run doctests for GHC 8.10.7
+#if !MIN_VERSION_bytestring(0,11,1)
+-- $setup
+-- >>> :{
+-- instance Show B.Builder where
+--   show = show . B.toLazyByteString
+-- :}
+#endif
+
 -- | An item from the query string, split up into two parts.
 --
 -- The second part should be 'Nothing' if there was no key-value
