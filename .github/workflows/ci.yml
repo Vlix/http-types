@@ -18,7 +18,7 @@ on:
 jobs:
   cabal:
     name: cabal / ghc-${{matrix.ghc}} / ${{ matrix.os }}
-    continue-on-error: ${{ matrix.ghc == '9.6.3'}}
+    continue-on-error: ${{ matrix.ghc == '9.8.1'}}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -27,17 +27,17 @@ jobs:
           - macOS-latest
         cabal: ["latest"]
         ghc:
-          - "7.10.3"
           - "8.10.7"
           - "9.0.2"
           - "9.2.8"
           - "9.4.8"
           - "9.6.3"
+          - "9.8.1"
 
     steps:
     - uses: actions/checkout@v4
 
-    - uses: haskell/actions/setup@v2
+    - uses: haskell-actions/setup@v2
       id: setup-haskell-cabal
       name: Setup Haskell
       with:
@@ -52,20 +52,14 @@ jobs:
         key: ${{ runner.os }}-${{ matrix.ghc }}-cabal
 
     - name: Build
-      env:
-        EXTRAOPTION: ${{ matrix.ghc == '7.10.3' && '--ghc-option=optl-no-pie' || '' }}
       run: |
-        cabal build all --enable-tests --enable-benchmarks --write-ghc-environment-files=always --ghc-option='-Wall' $EXTRAOPTION
+        cabal build all --enable-tests --enable-benchmarks --write-ghc-environment-files=always --ghc-option='-Wall'
     - name: Test
-      env:
-        EXTRAOPTION: ${{ matrix.ghc == '7.10.3' && '--ghc-option=optl-no-pie' || '' }}
       run: |
-        cabal test test:spec --enable-tests --ghc-option='-Wall' $EXTRAOPTION
+        cabal test test:spec --enable-tests --ghc-option='-Wall'
     - name: Test Docs
-      env:
-        EXTRAOPTION: ${{ matrix.ghc == '7.10.3' && '--ghc-option=optl-no-pie' || '' }}
       run: |
-        cabal exec -- cabal test test:doctests --enable-tests --ghc-option='-Wall' $EXTRAOPTION
+        cabal exec -- cabal test test:doctests --enable-tests --ghc-option='-Wall'
     # # We probably want to add benchmarks at some point, just to make sure
     # # functions don't regress in performance too much?
     # - name: Bench
@@ -96,7 +90,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - uses: haskell/actions/setup@v2
+    - uses: haskell-actions/setup@v2
       name: Setup Haskell Stack
       with:
         stack-version: ${{ matrix.stack }}
