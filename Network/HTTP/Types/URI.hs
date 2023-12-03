@@ -104,7 +104,7 @@ import Data.Word (Word8)
 -- $setup
 -- >>> :{
 -- instance Show B.Builder where
---   show = show . toLazyByteString
+--   show = show . B.toLazyByteString
 -- :}
 #endif
 
