@@ -114,6 +114,8 @@ module Network.HTTP.Types (
     imATeapot418,
     status422,
     unprocessableEntity422,
+    status426,
+    upgradeRequired426,
     status428,
     preconditionRequired428,
     status429,

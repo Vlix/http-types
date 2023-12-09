@@ -112,9 +112,9 @@ module Network.HTTP.Types.Status (
     status504,
     gatewayTimeout504,
     status505,
+    httpVersionNotSupported505,
     status511,
     networkAuthenticationRequired511,
-    httpVersionNotSupported505,
 
     -- * Checking status code category
     statusIsInformational,
@@ -138,8 +138,14 @@ import GHC.Generics (Generic)
 --
 -- Note that the 'Show' instance is only for debugging.
 data Status = Status
-    { statusCode :: Int
-    , statusMessage :: B.ByteString
+    { -- | The 3-digit code of a 'Status'
+      --
+      -- For example: "200" in a @200 OK@ status
+      statusCode :: Int
+    , -- | The textual message of a 'Status'
+      --
+      -- For example: "Not Found" in a @404 Not Found@ status
+      statusMessage :: B.ByteString
     }
     deriving
         ( Show
