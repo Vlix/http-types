@@ -253,9 +253,9 @@ module Network.HTTP.Types (
     renderQueryBuilderPartialEscape,
 
     -- ** Generalized query types
-    QueryLike (toQuery),
-    QueryKeyLike (toQueryKey),
-    QueryValueLike (toQueryValue),
+    QueryLike (..),
+    QueryKeyLike (..),
+    QueryValueLike (..),
 
     -- ** Path
 
