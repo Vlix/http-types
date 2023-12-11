@@ -1,5 +1,9 @@
 # Changelog for `http-types`
 
+## 0.12.5 [XXXX-XX-XX]
+
+* Export everything from `Network.HTTP.Types`
+
 ## 0.12.4 [2023-11-29]
 
 * Add `Data` and `Generic` instances to `ByteRange`, `StdMethod`, `Status` and `HttpVersion`.
