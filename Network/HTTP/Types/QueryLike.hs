@@ -57,4 +57,4 @@ instance QueryValueLike L.ByteString where toQueryValue = Just . B.concat . L.to
 instance QueryValueLike T.Text where toQueryValue = Just . T.encodeUtf8
 instance QueryValueLike [Char] where toQueryValue = Just . T.encodeUtf8 . T.pack
 instance QueryValueLike a => QueryValueLike (Maybe a) where
-    toQueryValue = maybe Nothing toQueryValue
+    toQueryValue mVal = mVal >>= toQueryValue
