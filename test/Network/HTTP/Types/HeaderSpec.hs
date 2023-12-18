@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Network.HTTP.Types.HeaderSpec (main, spec) where
@@ -6,8 +7,9 @@ module Network.HTTP.Types.HeaderSpec (main, spec) where
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as B8
 import Data.CaseInsensitive (original)
+import Data.Word (Word8)
 import Test.Hspec
--- import Test.QuickCheck (Arbitrary (..), choose, property, resize)
+import Test.QuickCheck (Arbitrary (..), NonEmptyList (..), oneof, property)
 import Test.QuickCheck.Instances ()
 
 import Network.HTTP.Types
@@ -19,6 +21,20 @@ spec :: Spec
 spec = do
     describe "Regression tests" $ do
         mapM_ headerCheck allHeaders
+
+    describe "byte ranges" $ do
+        it "is identity to render and parse ByteRanges" $
+            property $ \(NonEmpty brs) ->
+                Just brs == parseByteRanges (renderByteRanges brs)
+        it "is not satisfiable with suffix of zero" $
+            parseByteRanges "bytes=-0" `shouldBe` Nothing
+        it "is not satisfiable with 'from' lower than 'to'" $
+            property $ \w81 w82 ->
+                let w8toInt = min 127 . fromIntegral @Word8 @Integer
+                    start = w8toInt w81 + end + 1 -- if both are 0, @not (w81 < w82)@
+                    end = w8toInt w82
+                    range = show start <> "-" <> show end
+                 in parseByteRanges ("bytes=" <> B8.pack range) `shouldBe` Nothing
 
 type HeaderTuple = (HeaderName, HeaderName)
 
@@ -90,3 +106,18 @@ headerCheck (hdr, msg) = do
 
 maxMsg :: Int
 maxMsg = maximum $ fmap (B.length . original . snd) allHeaders
+
+-- | Generate valid ranges.
+--
+-- All values are positive and non-zero for easier testing.
+instance Arbitrary ByteRange where
+    arbitrary =
+        oneof
+            [ ByteRangeFrom <$> num
+            , do
+                from <- num
+                ByteRangeFromTo from . (from +) <$> num
+            , ByteRangeSuffix <$> num
+            ]
+      where
+        num = (+ 1) . fromIntegral @Word @Integer <$> arbitrary
