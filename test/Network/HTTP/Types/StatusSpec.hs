@@ -4,15 +4,11 @@
 module Network.HTTP.Types.StatusSpec (main, spec) where
 
 import qualified Data.ByteString as B
--- import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString.Char8 as B8
--- import qualified Data.ByteString.Lazy as BL
 import Data.Function (on)
 import qualified Data.List as L
--- import Data.Text (Text)
--- import Debug.Trace (traceShow)
 import Test.Hspec
-import Test.QuickCheck (Arbitrary (..), choose, property, resize) -- , (==>))
+import Test.QuickCheck (Arbitrary (..), choose, property, resize)
 import Test.QuickCheck.Instances ()
 
 import Network.HTTP.Types

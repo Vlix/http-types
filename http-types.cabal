@@ -42,7 +42,8 @@ Library
 Test-suite spec
   main-is:             Spec.hs
   hs-source-dirs:      test
-  other-modules:       Network.HTTP.Types.MethodSpec
+  other-modules:       Network.HTTP.Types.HeaderSpec
+                       Network.HTTP.Types.MethodSpec
                        Network.HTTP.Types.StatusSpec
                        Network.HTTP.Types.URISpec
                        Network.HTTP.Types.VersionSpec
@@ -51,12 +52,13 @@ Test-suite spec
   default-language:    Haskell2010
   build-tool-depends:  hspec-discover:hspec-discover
   build-depends:       base,
-                       http-types,
-                       text,
                        bytestring,
+                       case-insensitive,
+                       hspec >= 1.3,
+                       http-types,
                        QuickCheck,
                        quickcheck-instances,
-                       hspec >= 1.3
+                       text
 
 Test-Suite doctests
   main-is:             doctests.hs
