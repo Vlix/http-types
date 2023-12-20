@@ -275,12 +275,11 @@ ord8 :: Char -> Word8
 ord8 = fromIntegral . ord
 
 unreservedQS, unreservedPI :: [Word8]
-unreservedQS = map ord8 "-_.~"
--- FIXME: According to RFC 3986, the following are also allowed in path segments:
--- "!'()*;"
---
--- https://www.rfc-editor.org/rfc/rfc3986#section-3.3
-unreservedPI = map ord8 "-_.~:@&=+$,"
+-- NOTE: semicolons are also allowed in query strings, but putting them in the unreserved
+-- section here breaks the roundtrip tests due to the inclusion of the semicolon in the
+-- `queryStringSeparators` above
+unreservedQS = map ord8 "-_.~:@$,()'!*"
+unreservedPI = map ord8 "-_.~:@&=+$,()'!*;"
 
 -- | Percent-encoding for URLs.
 --
