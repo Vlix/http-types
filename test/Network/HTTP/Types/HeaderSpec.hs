@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Network.HTTP.Types.HeaderSpec (main, spec) where
@@ -9,7 +8,7 @@ import qualified Data.ByteString.Char8 as B8
 import Data.CaseInsensitive (original)
 import Data.Word (Word8)
 import Test.Hspec
-import Test.QuickCheck (Arbitrary (..), NonEmptyList (..), oneof, property)
+import Test.QuickCheck (Arbitrary (..), Gen, NonEmptyList (..), oneof, property)
 import Test.QuickCheck.Instances ()
 
 import Network.HTTP.Types
@@ -26,12 +25,15 @@ spec = do
         it "is identity to render and parse ByteRanges" $
             property $ \(NonEmpty brs) ->
                 Just brs == parseByteRanges (renderByteRanges brs)
+        it "is satisfiable with from-to of zero" $
+            parseByteRanges "bytes=0-0" `shouldBe` Just [ByteRangeFromTo 0 0]
         it "is not satisfiable with suffix of zero" $
             parseByteRanges "bytes=-0" `shouldBe` Nothing
         it "is not satisfiable with 'from' lower than 'to'" $
             property $ \w81 w82 ->
-                let w8toInt = min 127 . fromIntegral @Word8 @Integer
-                    start = w8toInt w81 + end + 1 -- if both are 0, @not (w81 < w82)@
+                let w8toInt = fromIntegral :: Word8 -> Integer
+                    -- if both are 0 it's @not (start < end)@ so we add 1
+                    start = w8toInt w81 + end + 1
                     end = w8toInt w82
                     range = show start <> "-" <> show end
                  in parseByteRanges ("bytes=" <> B8.pack range) `shouldBe` Nothing
@@ -114,10 +116,12 @@ instance Arbitrary ByteRange where
     arbitrary =
         oneof
             [ ByteRangeFrom <$> num
-            , do
-                from <- num
+            , num >>= \from ->
                 ByteRangeFromTo from . (from +) <$> num
             , ByteRangeSuffix <$> num
             ]
       where
-        num = (+ 1) . fromIntegral @Word @Integer <$> arbitrary
+        num =
+            (+ 1) -- making sure it's non-zero
+                . fromIntegral
+                <$> (arbitrary :: Gen Word) -- making sure it's positive
