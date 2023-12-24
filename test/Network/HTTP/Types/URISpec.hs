@@ -57,19 +57,29 @@ spec = do
             property propEncodeQueryText
         it "parseQuery is same as parseQueryText" $
             property propDecodeQueryText
+        it "renderQuery is same as renderSimpleQuery" $
+            property propEncodeSimpleQuery
+        it "parseQuery is same as parseSimpleQuery" $
+            property propDecodeSimpleQuery
         it "add ? in front of Query if and only if necessary" $
             property propQueryQuestionMark
 
     describe "URL encode/decode" $ do
         it "is identity to encode and then decode" $
             property propEncodeDecodeURL
+        it "encodes all ASCII and decodes again" $ do
+            let asciis = B.pack [0 .. 255]
+            urlDecode True (urlEncode True asciis) `shouldBe` asciis
+            urlDecode False (urlEncode True asciis) `shouldBe` asciis
+            -- FIXME: not encoding '+' doesn't cooperate with decoding while
+            -- replacing the '+' with ' '.
+            -- urlDecode True (urlEncode False asciis) `shouldBe` asciis
+            urlDecode False (urlEncode False asciis) `shouldBe` asciis
 
     describe "decodePathSegments" $ do
         it "is inverse to encodePathSegments" $
             property $ \p ->
-                (p /= [""])
-                    ==> p
-                    == (decodePathSegments . toStrictBS . encodePathSegments) p
+                (p /= [""]) ==> p == (decodePathSegments . toStrictBS . encodePathSegments) p
 
     describe "extractPath" $ do
         context "when used with a relative URL" $ do
@@ -98,14 +108,27 @@ spec = do
                     it "returns /" $
                         extractPath "https://example.com" `shouldBe` "/"
 
+            context "when used without protocol" $ do
+                it "returns unchanged" $
+                    extractPath "www.example.com/foo" `shouldBe` "www.example.com/foo"
+
+                context "even without path" $
+                    it "returns unchanged" $
+                        extractPath "www.example.com" `shouldBe` "www.example.com"
+
+    let sampleQuery = [("a", Just "b c d"), ("x", Just ""), ("y", Nothing)]
     describe "parseQuery" $ do
         it "returns value with '+' replaced to ' '" $
-            parseQuery "?a=b+c+d&x=&y" `shouldBe` [("a", Just "b c d"), ("x", Just ""), ("y", Nothing)]
+            parseQuery "?a=b+c+d&x=&y" `shouldBe` sampleQuery
         it "also does so without the question mark" $
-            parseQuery "a=b+c+d&x=&y" `shouldBe` [("a", Just "b c d"), ("x", Just ""), ("y", Nothing)]
+            parseQuery "a=b+c+d&x=&y" `shouldBe` sampleQuery
+        it "is parsed the same regardless of question mark" $
+            property $ \(QueryGen q) -> do
+                let q' = renderQuery False q
+                parseQuery q' `shouldBe` parseQuery ("?" <> q')
 
     describe "parseQueryReplacePlus" $ do
-        it "returns value with '+' replaced to ' '" $
+        it "returns value with '+' replaced by ' '" $
             parseQueryReplacePlus True "?a=b+c+d&x=&y" `shouldBe` [("a", Just "b c d"), ("x", Just ""), ("y", Nothing)]
         it "returns value with '+' preserved" $
             parseQueryReplacePlus False "?a=b+c+d&x=&y" `shouldBe` [("a", Just "b+c+d"), ("x", Just ""), ("y", Nothing)]
@@ -123,8 +146,8 @@ propEncodeDecodeQuery :: QueryGen B.ByteString -> Bool -> Bool
 propEncodeDecodeQuery (QueryGen q) b =
     q == parseQuery (renderQuery b q)
 
-propQueryQuestionMark :: (Bool, Query) -> Bool
-propQueryQuestionMark (useQuestionMark, query) =
+propQueryQuestionMark :: Bool -> Query -> Bool
+propQueryQuestionMark useQuestionMark query =
     actual == expected
   where
     actual = case B8.uncons $ renderQuery useQuestionMark query of
@@ -140,6 +163,12 @@ propEncodeQueryText :: QueryGen Text -> Bool -> Bool
 propEncodeQueryText (QueryGen q) b =
     toStrictBS (renderQueryText b q) == renderQuery b (queryTextToQuery q)
 
+propEncodeSimpleQuery :: QueryGen B.ByteString -> Bool -> Bool
+propEncodeSimpleQuery (QueryGen q) b =
+    renderSimpleQuery b simpleQuery == renderQuery b (simpleQueryToQuery simpleQuery)
+  where
+    simpleQuery = toSimpleQuery q
+
 propDecodeQueryText :: QueryGen Text -> Property
 propDecodeQueryText (QueryGen q) =
     (parseQueryText rq == queryToQueryText (parseQuery rq))
@@ -147,25 +176,40 @@ propDecodeQueryText (QueryGen q) =
   where
     rq = toStrictBS (renderQueryText True q)
 
+propDecodeSimpleQuery :: QueryGen B.ByteString -> Bool
+propDecodeSimpleQuery (QueryGen q) =
+    parseSimpleQuery rq == toSimpleQuery (parseQuery rq)
+  where
+    rq = renderQuery True q
+
 propEncodeDecodeQuerySimple :: QueryGen B.ByteString -> Bool -> Bool
 propEncodeDecodeQuerySimple (QueryGen q') b =
     q == (parseSimpleQuery . renderSimpleQuery b) q
   where
     q = fmap (fmap $ fromMaybe "") q'
 
-propEncodeDecodeURL :: B.ByteString -> Bool -> Bool
-propEncodeDecodeURL bs b =
-    bs == urlDecode b (urlEncode b bs)
+propEncodeDecodeURL :: B.ByteString -> Bool -> Bool -> Bool
+propEncodeDecodeURL bs b1 b2 =
+    bs == urlDecode b1 (urlEncode b3 bs)
+  where
+    b3 = b1 || b2
 
 newtype QueryGenItem b = QueryGenItem (b, Maybe b)
     deriving newtype (Show)
 newtype QueryGen b = QueryGen [(b, Maybe b)]
     deriving newtype (Show)
 
-instance Arbitrary (QueryGenItem B.ByteString) where arbitrary = arbQueryGenItem B.null
-instance Arbitrary (QueryGenItem Text) where arbitrary = arbQueryGenItem T.null
-instance Arbitrary (QueryGen B.ByteString) where arbitrary = arbQueryGen
-instance Arbitrary (QueryGen Text) where arbitrary = arbQueryGen
+instance Arbitrary (QueryGenItem B.ByteString) where
+    arbitrary = arbQueryGenItem B.null
+
+instance Arbitrary (QueryGenItem Text) where
+    arbitrary = arbQueryGenItem T.null
+
+instance Arbitrary (QueryGen B.ByteString) where
+    arbitrary = arbQueryGen
+
+instance Arbitrary (QueryGen Text) where
+    arbitrary = arbQueryGen
 
 arbQueryGenItem :: (Arbitrary a) => (a -> Bool) -> Gen (QueryGenItem a)
 arbQueryGenItem p = do
@@ -182,3 +226,6 @@ arbQueryGen = do
 
 toStrictBS :: B.Builder -> B.ByteString
 toStrictBS = BL.toStrict . B.toLazyByteString
+
+toSimpleQuery :: Query -> SimpleQuery
+toSimpleQuery q = fmap (fromMaybe "") <$> q
