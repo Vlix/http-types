@@ -527,7 +527,7 @@ type PartialEscapeQuery = [PartialEscapeQueryItem]
 -- If you want a question mark (@?@) added to the front of the result, use 'True'.
 --
 -- >>> renderQueryPartialEscape True [("a", [QN "x:z + ", QE (encodeUtf8 "They said: \"שלום\"")])]
--- "?a=x:z + They%20said%3A%20%22%D7%A9%D7%9C%D7%95%D7%9D%22"
+-- "?a=x:z + They%20said:%20%22%D7%A9%D7%9C%D7%95%D7%9D%22"
 --
 -- @since 0.12.1
 renderQueryPartialEscape :: Bool -> PartialEscapeQuery -> B.ByteString
