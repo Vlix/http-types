@@ -7,13 +7,15 @@
 module Network.HTTP.Types.URISpec (main, spec) where
 
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Builder as B
+import qualified Data.ByteString.Builder as B hiding (writeFile)
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.ByteString.Lazy as BL
 import Data.Maybe (fromMaybe)
 import Data.Text as T (Text, null)
 import Debug.Trace (traceShow)
+import System.FilePath ((</>))
 import Test.Hspec
+import Test.Hspec.Golden (Golden (..))
 import Test.QuickCheck (
     Arbitrary (..),
     Gen,
@@ -67,14 +69,20 @@ spec = do
     describe "URL encode/decode" $ do
         it "is identity to encode and then decode" $
             property propEncodeDecodeURL
+        let asciis = B.pack [0 .. 255]
         it "encodes all ASCII and decodes again" $ do
-            let asciis = B.pack [0 .. 255]
             urlDecode True (urlEncode True asciis) `shouldBe` asciis
             urlDecode False (urlEncode True asciis) `shouldBe` asciis
             -- FIXME: not encoding '+' doesn't cooperate with decoding while
             -- replacing the '+' with ' '.
             -- urlDecode True (urlEncode False asciis) `shouldBe` asciis
             urlDecode False (urlEncode False asciis) `shouldBe` asciis
+        it "still encodes the same (path)" $
+            mkGoldenFile "urlEncode-path" $
+                urlEncode False asciis
+        it "still encodes the same (query)" $
+            mkGoldenFile "urlEncode-query" $
+                urlEncode True asciis
 
     describe "decodePathSegments" $ do
         it "is inverse to encodePathSegments" $
@@ -132,6 +140,21 @@ spec = do
             parseQueryReplacePlus True "?a=b+c+d&x=&y" `shouldBe` [("a", Just "b c d"), ("x", Just ""), ("y", Nothing)]
         it "returns value with '+' preserved" $
             parseQueryReplacePlus False "?a=b+c+d&x=&y" `shouldBe` [("a", Just "b+c+d"), ("x", Just ""), ("y", Nothing)]
+
+goldenDir :: FilePath
+goldenDir = "test" </> "golden"
+
+mkGoldenFile :: String -> B.ByteString -> Golden B.ByteString
+mkGoldenFile name content =
+    Golden {
+        output = content,
+        encodePretty = B8.unpack,
+        writeToFile = B.writeFile,
+        readFromFile = B.readFile,
+        goldenFile = goldenDir </> name <> ".golden",
+        actualFile = Just (goldenDir </> name <> ".actual"),
+        failFirstTime = False
+    }
 
 propEncodeDecodePath :: ([Text], QueryGen B.ByteString) -> Bool
 propEncodeDecodePath (p', QueryGen b) =
