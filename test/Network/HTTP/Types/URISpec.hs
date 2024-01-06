@@ -41,6 +41,7 @@ spec = do
         it "does not escape period and dash" $
             toStrictBS (encodePath ["foo-bar.baz"] [])
                 `shouldBe` "/foo-bar.baz"
+        -- FIXME: needs more path tests
 
     describe "encode/decode query" $ do
         it "is identity to encode and then decode" $
@@ -123,6 +124,8 @@ spec = do
                 context "even without path" $
                     it "returns unchanged" $
                         extractPath "www.example.com" `shouldBe` "www.example.com"
+
+    -- FIXME: Add tests for the 'PartialEscapeQuery' types and functions.
 
     let sampleQuery = [("a", Just "b c d"), ("x", Just ""), ("y", Nothing)]
     describe "parseQuery" $ do
