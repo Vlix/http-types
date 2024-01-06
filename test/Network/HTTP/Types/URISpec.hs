@@ -38,12 +38,6 @@ spec = do
     describe "encode/decode path" $ do
         it "is identity to encode and then decode" $
             property propEncodeDecodePath
-        it "renders as expected" $
-            renderQuery True [("a", Just "x"), ("b", Nothing), ("c", Just "")]
-                `shouldBe` "?a=x&b&c="
-        it "renders as expected without '?'" $
-            renderQuery False [("a", Just "x"), ("b", Nothing), ("c", Just "")]
-                `shouldBe` "a=x&b&c="
         it "does not escape period and dash" $
             toStrictBS (encodePath ["foo-bar.baz"] [])
                 `shouldBe` "/foo-bar.baz"
@@ -65,6 +59,12 @@ spec = do
             property propDecodeSimpleQuery
         it "add ? in front of Query if and only if necessary" $
             property propQueryQuestionMark
+        it "renders as expected" $
+            renderQuery True [("a", Just "x"), ("b", Nothing), ("c", Just "")]
+                `shouldBe` "?a=x&b&c="
+        it "renders as expected without '?'" $
+            renderQuery False [("a", Just "x"), ("b", Nothing), ("c", Just "")]
+                `shouldBe` "a=x&b&c="
 
     describe "URL encode/decode" $ do
         it "is identity to encode and then decode" $
