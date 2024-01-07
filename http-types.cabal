@@ -13,7 +13,7 @@ Copyright:           (C) 2011 Aristid Breitkreuz
 Category:            Network, Web
 Build-type:          Simple
 Extra-source-files:
-    README
+    README.md
     CHANGELOG.md
     test/.golden/urlEncode-path/golden
     test/.golden/urlEncode-query/golden
