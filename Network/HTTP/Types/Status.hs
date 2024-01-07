@@ -617,6 +617,9 @@ status417 = mkStatus 417 "Expectation Failed"
 expectationFailed417 :: Status
 expectationFailed417 = status417
 
+-- FIXME: RFC 7168 updates the message to "I'm a Teapot" (capital T)
+-- Should we update this?
+
 -- | I'm a teapot 418
 --
 -- @since 0.6.6

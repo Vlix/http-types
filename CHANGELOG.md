@@ -3,6 +3,8 @@
 ## 0.12.5 [XXXX-XX-XX]
 
 * Export everything from `Network.HTTP.Types`
+* Added a bunch of regression, unit and property tests for stability.
+* Updated the `README.md`
 
 ## 0.12.4 [2023-11-29]
 
