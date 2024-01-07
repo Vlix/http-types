@@ -14,7 +14,7 @@ Category:            Network, Web
 Build-type:          Simple
 Extra-source-files:
     README
-    CHANGELOG
+    CHANGELOG.md
     test/.golden/urlEncode-path/golden
     test/.golden/urlEncode-query/golden
 
