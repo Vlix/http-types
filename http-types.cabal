@@ -15,8 +15,8 @@ Build-type:          Simple
 Extra-source-files:
     README
     CHANGELOG
-    test/golden/urlEncode-path.golden
-    test/golden/urlEncode-query.golden
+    test/.golden/urlEncode-path/golden
+    test/.golden/urlEncode-query/golden
 
 Source-repository this
   type: git

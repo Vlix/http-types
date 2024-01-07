@@ -7,3 +7,4 @@ dist-newstyle/*
 *.lock
 .stack-work/*
 test/golden/*.actual
+test/.golden/**/actual

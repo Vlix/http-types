@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -7,7 +8,7 @@
 module Network.HTTP.Types.URISpec (main, spec) where
 
 import qualified Data.ByteString as B
-import qualified Data.ByteString.Builder as B hiding (writeFile)
+import qualified Data.ByteString.Builder as BB
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.ByteString.Lazy as BL
 import Data.Maybe (fromMaybe)
@@ -145,7 +146,7 @@ spec = do
             parseQueryReplacePlus False "?a=b+c+d&x=&y" `shouldBe` [("a", Just "b+c+d"), ("x", Just ""), ("y", Nothing)]
 
 goldenDir :: FilePath
-goldenDir = "test" </> "golden"
+goldenDir = "test" </> ".golden"
 
 mkGoldenFile :: String -> B.ByteString -> Golden B.ByteString
 mkGoldenFile name content =
@@ -154,8 +155,15 @@ mkGoldenFile name content =
         encodePretty = B8.unpack,
         writeToFile = B.writeFile,
         readFromFile = B.readFile,
-        goldenFile = goldenDir </> name <> ".golden",
-        actualFile = Just (goldenDir </> name <> ".actual"),
+#if MIN_VERSION_hspec_golden(0,2,0)
+        -- Has this format because 'hspec-golden-0.1.0.3' has it as default
+        -- and we want to keep it the same until we drop LTS-18
+        goldenFile = goldenDir </> name </> "golden",
+        actualFile = Just (goldenDir </> name </> "actual"),
+#else
+        testName = name,
+        directory = goldenDir,
+#endif
         failFirstTime = False
     }
 
@@ -250,8 +258,8 @@ arbQueryGen = do
   where
     go (QueryGenItem i) = i
 
-toStrictBS :: B.Builder -> B.ByteString
-toStrictBS = BL.toStrict . B.toLazyByteString
+toStrictBS :: BB.Builder -> B.ByteString
+toStrictBS = BL.toStrict . BB.toLazyByteString
 
 toSimpleQuery :: Query -> SimpleQuery
 toSimpleQuery q = fmap (fromMaybe "") <$> q
