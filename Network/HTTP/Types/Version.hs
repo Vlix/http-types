@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE PatternSynonyms #-}
@@ -21,7 +22,8 @@ module Network.HTTP.Types.Version (
 ) where
 
 import Data.ByteString as B (ByteString, foldl', null, span, stripPrefix, uncons)
-import Data.ByteString.Char8 as B8 (cons, pack)
+import Data.ByteString.Builder as B (toLazyByteString, string7, word8)
+import Data.ByteString.Lazy as BL (toStrict)
 import Data.Data (Data)
 import Data.Typeable (Typeable)
 import Data.Word8 (isDigit, _0, _period)
@@ -96,59 +98,68 @@ pattern Http30 <- HttpVersion 3 0
 -- === __Examples__
 --
 -- > parseHttpVersion "HTTP/1.1"  == Right (HttpVersion 1 1)
+-- > parseHttpVersion "HTTP/2.0"  == Right (HttpVersion 2 0)
 -- > parseHttpVersion "HTTP/2"    == Right (HttpVersion 2 0)
 -- > parseHttpVersion "Hello"     == Left "Not an HTTP protocol version"
--- > parseHttpVersion "HTTP:2"    == Left "Not an HTTP protocol version"
+-- > parseHttpVersion "HTTP2"     == Left "Not an HTTP protocol version"
 -- > parseHttpVersion "HTTP/TWO"  == Left "No HTTP protocol major version provided"
 -- > parseHttpVersion "HTTP/2DOT" == Left "Expected '.' after first digit(s)"
 -- > parseHttpVersion "HTTP/2."   == Left "No HTTP protocol minor version provided"
--- > parseHttpVersion "HTTP/2.@"  == Left "Unexpected bytes after HTTP minor version"
+-- > parseHttpVersion "HTTP/2.0@" == Left "Unexpected bytes after HTTP minor version"
 --
 -- @since 0.12.5
 parseHttpVersion :: ByteString -> Either String HttpVersion
-parseHttpVersion bs =
-    case B.stripPrefix "HTTP/" bs of
-        Nothing -> Left "Not an HTTP protocol version"
-        Just rest ->
-            withDigits "major" rest $ \majV more ->
-                HttpVersion majV <$> getMinorVersion more
+-- This order is from most likely to be checked with this function.
+-- HTTP/2 and /3 don't use this format as the version string, they use "h2" and "h3".
+parseHttpVersion "HTTP/1.1" = Right http11
+parseHttpVersion "HTTP/1.0" = Right http10
+parseHttpVersion "HTTP/2.0" = Right http20
+parseHttpVersion "HTTP/3.0" = Right http30
+parseHttpVersion "HTTP/0.9" = Right http09
+parseHttpVersion bs = do
+    rest <- note "Not an HTTP protocol version" $ B.stripPrefix "HTTP/" bs
+    (ds, more) <- withDigits "major" rest
+    let majV = unsafeDigitsToInt ds
+    HttpVersion majV <$> getMinorVersion more
   where
-    withDigits s rest f =
+    note s = maybe (Left s) Right
+    withDigits s rest =
         case B.span isDigit rest of
             ("", _) -> Left $ "No HTTP protocol " <> s <> " version provided"
-            (ds, more) -> f (unsafeDigitsToInt ds) more
+            tup -> Right tup
     getMinorVersion =
         maybe (pure 0) go . B.uncons
       where
         go (w8, final)
             | w8 /= _period = Left "Expected '.' after first digit(s)"
-            | otherwise =
-                withDigits "minor" final $ \minV extra ->
-                    if B.null extra
-                        then pure minV
-                        else Left "Unexpected bytes after HTTP minor version"
+            | otherwise = do
+                (ds, extra) <- withDigits "minor" final
+                if B.null extra
+                    then Right $ unsafeDigitsToInt ds
+                    else Left "Unexpected bytes after HTTP minor version"
 
 unsafeDigitsToInt :: ByteString -> Int
 unsafeDigitsToInt = B.foldl' go 0
   where
-    go i w8 = 10 * i + fromIntegral (w8 - _0)
+    go !i w8 = 10 * i + fromIntegral (w8 - _0)
 
 -- | Convert an 'HttpVersion' to a 'ByteString'.
 --
--- If the minor version is zero, it is not rendered.
---
--- > renderHttpVersion http11 == "HTTP/1.1"
--- > renderHttpVersion http20 == "HTTP/2"
+-- >>> renderHttpVersion http11
+-- "HTTP/1.1"
+-- >>> renderHttpVersion http20
+-- "HTTP/2.0"
 --
 -- @since 0.12.5
 renderHttpVersion :: HttpVersion -> ByteString
-renderHttpVersion httpV =
-    "HTTP/"
-        <> toBS majV
-        <> if minV == 0
-            then ""
-            else B8.cons '/' $ toBS minV
+-- This order is from most likely to be checked with this function.
+renderHttpVersion Http11 = "HTTP/1.1"
+renderHttpVersion Http10 = "HTTP/1.0"
+renderHttpVersion Http20 = "HTTP/2.0"
+renderHttpVersion Http30 = "HTTP/3.0"
+renderHttpVersion Http09 = "HTTP/0.9"
+renderHttpVersion (HttpVersion majV minV) =
+    BL.toStrict . B.toLazyByteString $
+        B.string7 "HTTP/" <> toBS majV <> word8 _period <> toBS minV
   where
-    majV = httpMajor httpV
-    minV = httpMinor httpV
-    toBS = B8.pack . show
+    toBS = B.string7 . show
