@@ -1,3 +1,4 @@
+{-# LANGUAGE PatternSynonyms #-}
 module Network.HTTP.Types (
     -- * Methods
 
@@ -28,10 +29,15 @@ module Network.HTTP.Types (
 
     HttpVersion (..),
     http09,
+    pattern Http09,
     http10,
+    pattern Http10,
     http11,
+    pattern Http11,
     http20,
+    pattern Http20,
     http30,
+    pattern Http30,
     parseHttpVersion,
     renderHttpVersion,
 

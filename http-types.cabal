@@ -9,7 +9,7 @@ License:             BSD-3-Clause
 License-file:        LICENSE
 Author:              Aristid Breitkreuz, Michael Snoyman
 Maintainer:          felix.paulusma@gmail.com
-Copyright:           (C) 2011 Aristid Breitkreuz
+Copyright:           (C) 2011 Aristid Breitkreuz, (C) 2023 Felix Paulusma
 Category:            Network, Web
 Build-type:          Simple
 Extra-source-files:
