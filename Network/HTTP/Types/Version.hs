@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Types and constants to describe the HTTP version.
@@ -10,6 +11,11 @@ module Network.HTTP.Types.Version (
     http11,
     http20,
     http30,
+    pattern Http09,
+    pattern Http10,
+    pattern Http11,
+    pattern Http20,
+    pattern Http30,
     parseHttpVersion,
     renderHttpVersion,
 ) where
@@ -47,13 +53,22 @@ instance Show HttpVersion where
 http09 :: HttpVersion
 http09 = HttpVersion 0 9
 
+pattern Http09 :: HttpVersion
+pattern Http09 <- HttpVersion 0 9
+
 -- | HTTP 1.0
 http10 :: HttpVersion
 http10 = HttpVersion 1 0
 
+pattern Http10 :: HttpVersion
+pattern Http10 <- HttpVersion 1 0
+
 -- | HTTP 1.1
 http11 :: HttpVersion
 http11 = HttpVersion 1 1
+
+pattern Http11 :: HttpVersion
+pattern Http11 <- HttpVersion 1 1
 
 -- | HTTP 2.0
 --
@@ -61,11 +76,17 @@ http11 = HttpVersion 1 1
 http20 :: HttpVersion
 http20 = HttpVersion 2 0
 
+pattern Http20 :: HttpVersion
+pattern Http20 <- HttpVersion 2 0
+
 -- | HTTP 3.0
 --
 -- @since 0.12.5
 http30 :: HttpVersion
 http30 = HttpVersion 3 0
+
+pattern Http30 :: HttpVersion
+pattern Http30 <- HttpVersion 3 0
 
 -- | Attempt to parse a 'ByteString' as an 'HttpVersion'.
 --
