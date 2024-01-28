@@ -1,10 +1,15 @@
 # Changelog for `http-types`
 
-## 0.12.5 [XXXX-XX-XX]
+## 0.13 [XXXX-XX-XX]
 
-* Export everything from `Network.HTTP.Types`
+* Export everything from `Network.HTTP.Types`, so that is technically
+  the only module you'd have to import.
 * Added a bunch of regression, unit and property tests for stability.
 * Updated the `README.md`
+* Added new `HttpVersion`: `http30`
+* Added new parse and render functions for `HttpVersion`
+* Added pattern synonyms for `HttpVersion`s
+* Added new `Status`: `status451` / `unavailableForLegalReasons451`
 
 ## 0.12.4 [2023-11-29]
 
