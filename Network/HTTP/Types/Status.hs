@@ -844,4 +844,4 @@ statusIsServerError :: Status -> Bool
 statusIsServerError = statusIs 5
 
 statusIs :: Int -> Status -> Bool
-statusIs i Status{statusCode = code} = (code `div` 100) == i
+statusIs i = (== i) . (`div` 100) . statusCode
