@@ -8,12 +8,7 @@
 module Network.HTTP.Types.Status (
     -- * HTTP Status
 
-    -- If we ever want to deprecate the 'Status' data constructor:
-    -- #if __GLASGOW_HASKELL__ >= 908
-    --   {-# DEPRECATED "Use 'mkStatus' when constructing a 'Status'" #-} Status(Status)
-    -- #else
     Status (Status),
-    -- #endif
     statusCode,
     statusMessage,
     mkStatus,
@@ -101,6 +96,8 @@ module Network.HTTP.Types.Status (
     tooManyRequests429,
     status431,
     requestHeaderFieldsTooLarge431,
+    status451,
+    unavailableForLegalReasons451,
     status500,
     internalServerError500,
     status501,
@@ -162,8 +159,14 @@ data Status = Status
 -- name of the constructor, so that it doesn't clash with the new pattern synonym
 -- that's replacing it.
 --
--- > data Status = MkStatus ...
--- > pattern Status code msg = MkStatus code msg
+-- > {-# LANGUAGE PatternSynonyms #-}
+-- > data Status = MkStatus
+-- > { statusCode :: Int -- ^ 404
+-- > , statusMessage :: B.ByteString -- ^ "Not Found"
+-- > , statusRaw :: B.ByteString -- ^ "404 Not Found"
+-- > }
+-- > pattern Status code msg <- MkStatus code msg _
+-- >   where Status code msg = MkStatus code msg (fromString (show code <> " ") <> msg)
 
 -- | A 'Status' is equal to another 'Status' if the status codes are equal.
 instance Eq Status where
@@ -224,6 +227,7 @@ instance Enum Status where
     toEnum 428 = status428
     toEnum 429 = status429
     toEnum 431 = status431
+    toEnum 451 = status451
     toEnum 500 = status500
     toEnum 501 = status501
     toEnum 502 = status502
@@ -702,6 +706,20 @@ status431 = mkStatus 431 "Request Header Fields Too Large"
 -- @since 0.8.5
 requestHeaderFieldsTooLarge431 :: Status
 requestHeaderFieldsTooLarge431 = status431
+
+-- | Unavailable For Legal Reasons 451
+-- (<https://tools.ietf.org/html/rfc7725 RFC 7725>)
+--
+-- @since 0.13
+status451 :: Status
+status451 = mkStatus 451 "Unavailable For Legal Reasons"
+
+-- | Unavailable For Legal Reasons 451
+-- (<https://tools.ietf.org/html/rfc7725 RFC 7725>)
+--
+-- @since 0.13
+unavailableForLegalReasons451 :: Status
+unavailableForLegalReasons451 = status451
 
 -- | Internal Server Error 500
 status500 :: Status
