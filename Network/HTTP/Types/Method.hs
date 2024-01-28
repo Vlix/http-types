@@ -53,39 +53,39 @@ import GHC.Generics (Generic)
 -- | HTTP method (flat 'ByteString' type).
 type Method = B.ByteString
 
--- | HTTP GET Method
+-- | GET Method
 methodGet :: Method
 methodGet = renderStdMethod GET
 
--- | HTTP POST Method
+-- | POST Method
 methodPost :: Method
 methodPost = renderStdMethod POST
 
--- | HTTP HEAD Method
+-- | HEAD Method
 methodHead :: Method
 methodHead = renderStdMethod HEAD
 
--- | HTTP PUT Method
+-- | PUT Method
 methodPut :: Method
 methodPut = renderStdMethod PUT
 
--- | HTTP DELETE Method
+-- | DELETE Method
 methodDelete :: Method
 methodDelete = renderStdMethod DELETE
 
--- | HTTP TRACE Method
+-- | TRACE Method
 methodTrace :: Method
 methodTrace = renderStdMethod TRACE
 
--- | HTTP CONNECT Method
+-- | CONNECT Method
 methodConnect :: Method
 methodConnect = renderStdMethod CONNECT
 
--- | HTTP OPTIONS Method
+-- | OPTIONS Method
 methodOptions :: Method
 methodOptions = renderStdMethod OPTIONS
 
--- | HTTP PATCH Method
+-- | PATCH Method
 --
 -- @since 0.8.0
 methodPatch :: Method

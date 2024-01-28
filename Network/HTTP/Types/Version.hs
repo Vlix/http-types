@@ -83,7 +83,7 @@ pattern Http20 <- HttpVersion 2 0
 
 -- | HTTP 3.0
 --
--- @since 0.12.5
+-- @since 0.13
 http30 :: HttpVersion
 http30 = HttpVersion 3 0
 
@@ -107,7 +107,7 @@ pattern Http30 <- HttpVersion 3 0
 -- > parseHttpVersion "HTTP/2."   == Left "No HTTP protocol minor version provided"
 -- > parseHttpVersion "HTTP/2.0@" == Left "Unexpected bytes after HTTP minor version"
 --
--- @since 0.12.5
+-- @since 0.13
 parseHttpVersion :: ByteString -> Either String HttpVersion
 -- This order is from most likely to be checked with this function.
 -- HTTP/2 and /3 don't use this format as the version string, they use "h2" and "h3".
@@ -150,7 +150,7 @@ unsafeDigitsToInt = B.foldl' go 0
 -- >>> renderHttpVersion http20
 -- "HTTP/2.0"
 --
--- @since 0.12.5
+-- @since 0.13
 renderHttpVersion :: HttpVersion -> ByteString
 -- This order is from most likely to be checked with this function.
 renderHttpVersion Http11 = "HTTP/1.1"

@@ -1,6 +1,6 @@
 Cabal-version:       3.0
 Name:                http-types
-Version:             0.12.5
+Version:             0.13
 Synopsis:            Generic HTTP types for Haskell (for both client and server code).
 Description:         Types and functions to describe and handle HTTP concepts.
                      Including "methods", "headers", "query strings", "paths" and "HTTP versions".
@@ -21,7 +21,7 @@ Extra-source-files:
 Source-repository this
   type: git
   location: https://github.com/Vlix/http-types.git
-  tag: v0.12.5
+  tag: v0.13
 
 Source-repository head
   type: git
