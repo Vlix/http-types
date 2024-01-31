@@ -278,7 +278,7 @@ unreservedQS, unreservedPI :: [Word8]
 -- NOTE: semicolons are also allowed in query strings, but putting them in the unreserved
 -- section here breaks the roundtrip tests due to the inclusion of the semicolon in the
 -- `queryStringSeparators` above
-unreservedQS = map ord8 "-_.~:@$,()'!*"
+unreservedQS = map ord8 "-_.~:@$,()'!*/?"
 unreservedPI = map ord8 "-_.~:@&=+$,()'!*;"
 
 -- | Percent-encoding for URLs.
