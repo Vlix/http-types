@@ -6,3 +6,5 @@ dist-newstyle/*
 *_flymake.hs
 *.lock
 .stack-work/*
+test/golden/*.actual
+test/.golden/**/actual
