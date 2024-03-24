@@ -1,3 +1,4 @@
+{-# LANGUAGE PatternSynonyms #-}
 module Network.HTTP.Types (
     -- * Methods
 
@@ -28,9 +29,17 @@ module Network.HTTP.Types (
 
     HttpVersion (..),
     http09,
+    pattern Http09,
     http10,
+    pattern Http10,
     http11,
+    pattern Http11,
     http20,
+    pattern Http20,
+    http30,
+    pattern Http30,
+    parseHttpVersion,
+    renderHttpVersion,
 
     -- * Status
 
@@ -122,6 +131,8 @@ module Network.HTTP.Types (
     tooManyRequests429,
     status431,
     requestHeaderFieldsTooLarge431,
+    status451,
+    unavailableForLegalReasons451,
     status500,
     internalServerError500,
     status501,

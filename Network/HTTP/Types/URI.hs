@@ -88,7 +88,6 @@ import Data.Bits (shiftL, (.|.))
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Builder as B
 import qualified Data.ByteString.Lazy as BL
-import Data.Char (ord)
 import Data.List (intersperse)
 import Data.Maybe (fromMaybe)
 #if __GLASGOW_HASKELL__ < 710
@@ -97,7 +96,7 @@ import Data.Monoid
 import Data.Text (Text)
 import Data.Text.Encoding (decodeUtf8With, encodeUtf8)
 import Data.Text.Encoding.Error (lenientDecode)
-import Data.Word (Word8)
+import Data.Word8
 
 -- This section is needed to run doctests for GHC 8.10.7
 #if !MIN_VERSION_bytestring(0,11,1)
@@ -117,6 +116,9 @@ import Data.Word (Word8)
 type QueryItem = (B.ByteString, Maybe B.ByteString)
 
 -- | A sequence of 'QueryItem's.
+--
+-- General form: @a=b&c=d@, but if for example the value of @a@ is @Nothing@
+-- instead of @Just "b"@, it becomes @a&c=d@.
 type Query = [QueryItem]
 
 -- | Like Query, but with 'Text' instead of 'B.ByteString' (UTF8-encoded).
@@ -182,9 +184,9 @@ renderQueryBuilder qmark' (p : ps) =
         go (if qmark' then qmark else mempty) p
             : map (go amp) ps
   where
-    qmark = B.byteString "?"
-    amp = B.byteString "&"
-    equal = B.byteString "="
+    qmark = B.word8 _question
+    amp = B.word8 _ampersand
+    equal = B.word8 _equal
     go sep (k, mv) =
         mconcat
             [ sep
@@ -237,7 +239,7 @@ parseQueryReplacePlus replacePlus bs = parseQueryString' $ dropQuestion bs
   where
     dropQuestion q =
         case B.uncons q of
-            Just (63, q') -> q'
+            Just (w8, q') | w8 == _question -> q'
             _ -> q
     parseQueryString' q | B.null q = []
     parseQueryString' q =
@@ -245,7 +247,7 @@ parseQueryReplacePlus replacePlus bs = parseQueryString' $ dropQuestion bs
          in parsePair x : parseQueryString' xs
       where
         parsePair x =
-            let (k, v) = B.break (== 61) x -- equal sign
+            let (k, v) = B.break (== _equal) x
                 v'' =
                     case B.uncons v of
                         Just (_, v') -> Just $ urlDecode replacePlus v'
@@ -253,7 +255,7 @@ parseQueryReplacePlus replacePlus bs = parseQueryString' $ dropQuestion bs
              in (urlDecode replacePlus k, v'')
 
 queryStringSeparators :: B.ByteString
-queryStringSeparators = B.pack [38, 59] -- ampersand, semicolon
+queryStringSeparators = B.pack [_ampersand, _semicolon]
 
 -- | Break the second bytestring at the first occurrence of any bytes from
 -- the first bytestring, discarding that byte.
@@ -271,16 +273,27 @@ breakDiscard seps s =
 parseSimpleQuery :: B.ByteString -> SimpleQuery
 parseSimpleQuery = map (second $ fromMaybe B.empty) . parseQuery
 
-ord8 :: Char -> Word8
-ord8 = fromIntegral . ord
-
-unreservedQS, unreservedPI :: [Word8]
-unreservedQS = map ord8 "-_.~"
 -- FIXME: According to RFC 3986, the following are also allowed in path segments:
 -- "!'()*;"
 --
 -- https://www.rfc-editor.org/rfc/rfc3986#section-3.3
-unreservedPI = map ord8 "-_.~:@&=+$,"
+unreservedQS, unreservedPI :: [Word8]
+-- "-_.~"
+unreservedQS = [_hyphen, _underscore, _period, _tilde]
+-- "-_.~:@&=+$,"
+unreservedPI =
+    [ _hyphen
+    , _underscore
+    , _period
+    , _tilde
+    , _colon
+    , _at
+    , _ampersand
+    , _equal
+    , _plus
+    , _dollar
+    , _comma
+    ]
 
 -- | Percent-encoding for URLs.
 --
@@ -298,18 +311,18 @@ urlEncodeBuilder' extraUnreserved =
         | otherwise = h2 ch
 
     unreserved ch
-        | ch >= 65 && ch <= 90 = True -- A-Z
-        | ch >= 97 && ch <= 122 = True -- a-z
-        | ch >= 48 && ch <= 57 = True -- 0-9
+        | ch >= _A && ch <= _Z = True
+        | ch >= _a && ch <= _z = True
+        | ch >= _0 && ch <= _9 = True
     unreserved c = c `elem` extraUnreserved
 
     -- must be upper-case
-    h2 v = B.word8 37 `mappend` B.word8 (h a) `mappend` B.word8 (h b) -- 37 = %
+    h2 v = B.word8 _percent `mappend` B.word8 (h a) `mappend` B.word8 (h b)
       where
         (a, b) = v `divMod` 16
     h i
-        | i < 10 = 48 + i -- zero (0)
-        | otherwise = 65 + i - 10 -- 65: A
+        | i < 10 = _0 + i
+        | otherwise = _A + i - 10
 
 -- | Percent-encoding for URLs.
 --
@@ -355,20 +368,21 @@ urlDecode replacePlus z = fst $ B.unfoldrN (B.length z) go z
     go bs =
         case B.uncons bs of
             Nothing -> Nothing
-            -- plus to space
-            Just (43, ws) | replacePlus -> Just (32, ws)
-            -- percent
-            Just (37, ws) -> Just $ fromMaybe (37, ws) $ do
-                (x, xs) <- B.uncons ws
-                x' <- hexVal x
-                (y, ys) <- B.uncons xs
-                y' <- hexVal y
-                Just (combine x' y', ys)
+            Just (w8, ws)
+                -- plus to space
+                | replacePlus && w8 == _plus -> Just (_space, ws)
+                -- percent
+                | w8 == _percent -> Just $ fromMaybe (_percent, ws) $ do
+                    (x, xs) <- B.uncons ws
+                    x' <- hexVal x
+                    (y, ys) <- B.uncons xs
+                    y' <- hexVal y
+                    Just (combine x' y', ys)
             Just (w, ws) -> Just (w, ws)
     hexVal w
-        | 48 <= w && w <= 57 = Just $ w - 48 -- 0 - 9
-        | 65 <= w && w <= 70 = Just $ w - 55 -- A - F
-        | 97 <= w && w <= 102 = Just $ w - 87 -- a - f
+        | _0 <= w && w <= _9 = Just $ w - _0
+        | _A <= w && w <= _F = Just $ w - 55 -- (_A - 10)
+        | _a <= w && w <= _f = Just $ w - 87 -- (_a - 10)
         | otherwise = Nothing
     combine :: Word8 -> Word8 -> Word8
     combine a b = shiftL a 4 .|. b
@@ -430,10 +444,10 @@ decodePathSegments a =
   where
     drop1Slash bs =
         case B.uncons bs of
-            Just (47, bs') -> bs' -- 47 == /
+            Just (w8, bs') | w8 == _slash -> bs'
             _ -> bs
     go bs =
-        let (x, y) = B.break (== 47) bs
+        let (x, y) = B.break (== _slash) bs
          in decodePathSegment x
                 : if B.null y
                     then []
@@ -475,7 +489,7 @@ extractPath = ensureNonEmpty . extract
         | "http://" `B.isPrefixOf` path = (snd . breakOnSlash . B.drop 7) path
         | "https://" `B.isPrefixOf` path = (snd . breakOnSlash . B.drop 8) path
         | otherwise = path
-    breakOnSlash = B.break (== 47)
+    breakOnSlash = B.break (== _slash)
     ensureNonEmpty "" = "/"
     ensureNonEmpty p = p
 
@@ -491,7 +505,7 @@ encodePath x y = encodePathSegments x `mappend` renderQueryBuilder True y
 -- @since 0.5
 decodePath :: B.ByteString -> ([Text], Query)
 decodePath b =
-    let (x, y) = B.break (== 63) b -- question mark
+    let (x, y) = B.break (== _question) b
      in (decodePathSegments x, parseQuery y)
 
 -----------------------------------------------------------------------------------------
@@ -548,9 +562,9 @@ renderQueryBuilderPartialEscape qmark' (p : ps) =
         go (if qmark' then qmark else mempty) p
             : map (go amp) ps
   where
-    qmark = B.byteString "?"
-    amp = B.byteString "&"
-    equal = B.byteString "="
+    qmark = B.word8 _question
+    amp = B.word8 _ampersand
+    equal = B.word8 _equal
     go sep (k, mv) =
         mconcat
             [ sep

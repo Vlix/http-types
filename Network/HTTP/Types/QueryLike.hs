@@ -9,8 +9,8 @@ module Network.HTTP.Types.QueryLike (
 where
 
 import Control.Arrow ((***))
-import Data.ByteString as B (ByteString, concat)
-import Data.ByteString.Lazy as L (ByteString, toChunks)
+import Data.ByteString as B (ByteString)
+import Data.ByteString.Lazy as L (ByteString, toStrict)
 import Data.Maybe (catMaybes)
 import Data.Text as T (Text, pack)
 import Data.Text.Encoding as T (encodeUtf8)
@@ -48,12 +48,12 @@ instance (QueryKeyLike k, QueryValueLike v) => QueryLike [Maybe (k, v)] where
     toQuery = toQuery . catMaybes
 
 instance QueryKeyLike B.ByteString where toQueryKey = id
-instance QueryKeyLike L.ByteString where toQueryKey = B.concat . L.toChunks
+instance QueryKeyLike L.ByteString where toQueryKey = L.toStrict
 instance QueryKeyLike T.Text where toQueryKey = T.encodeUtf8
 instance QueryKeyLike [Char] where toQueryKey = T.encodeUtf8 . T.pack
 
 instance QueryValueLike B.ByteString where toQueryValue = Just
-instance QueryValueLike L.ByteString where toQueryValue = Just . B.concat . L.toChunks
+instance QueryValueLike L.ByteString where toQueryValue = Just . L.toStrict
 instance QueryValueLike T.Text where toQueryValue = Just . T.encodeUtf8
 instance QueryValueLike [Char] where toQueryValue = Just . T.encodeUtf8 . T.pack
 instance QueryValueLike a => QueryValueLike (Maybe a) where

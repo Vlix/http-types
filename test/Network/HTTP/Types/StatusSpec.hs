@@ -42,7 +42,7 @@ categoryCheck name p shoulds = do
         mapM_ (\(st, _, _, _) -> st `shouldNotSatisfy` p) $
             allStatusses L.\\ shoulds
   where
-    msg = "'" <> name <> "' " <> "identifies correct statusses" <> extra
+    msg = "'" <> name <> "' " <> extra <> "identifies correct statusses"
     extra = replicate (length ("statusIsInformational" :: String) - length name) ' '
 
 type StatusTuple = (Status, Status, Int, B.ByteString)
@@ -102,6 +102,7 @@ _400Statusses =
     , (status428, preconditionRequired428, 428, "Precondition Required")
     , (status429, tooManyRequests429, 429, "Too Many Requests")
     , (status431, requestHeaderFieldsTooLarge431, 431, "Request Header Fields Too Large")
+    , (status451, unavailableForLegalReasons451, 451, "Unavailable For Legal Reasons")
     ]
 
 _500Statusses :: [StatusTuple]
