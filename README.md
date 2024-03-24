@@ -9,13 +9,15 @@
 The goal of this library is to have one location for any library, package or project
 to base their general HTTP types on for better interoperability.
 
+This library also provides some utility functions for parsing and rendering HTTP types.
+
 ### This library provides basic types for the following:
 
-* HTTP versions (e.g. `HTTP/1.1`)
-* HTTP methods (e.g. `GET`)
-* HTTP headers (e.g. `Content-Type`)
-* HTTP statusses (e.g. `404`)
+* HTTP versions (e.g. `HTTP/1.1`) in [`Network.HTTP.Types.Version`](https://hackage.haskell.org/package/http-types/docs/Network-HTTP-Types-Version.html)
+* HTTP methods (e.g. `GET`) in [`Network.HTTP.Types.Method`](https://hackage.haskell.org/package/http-types/docs/Network-HTTP-Types-Method.html)
+* HTTP headers (e.g. `Content-Type`) in [`Network.HTTP.Types.Header`](https://hackage.haskell.org/package/http-types/docs/Network-HTTP-Types-Header.html)
+* HTTP statusses (e.g. `404`) in [`Network.HTTP.Types.Status`](https://hackage.haskell.org/package/http-types/docs/Network-HTTP-Types-Status.html)
+* HTTP URIs (e.g. paths, query parameters, etc.) in [`Network.HTTP.Types.URI`](https://hackage.haskell.org/package/http-types/docs/Network-HTTP-Types-URI.html)
 
-This library also contains some utility functions, e.g. related to URI handling,
-that are not necessarily restricted in use to HTTP, but the scope is restricted
-to things that are useful inside HTTP, i.e. no FTP URI parsing.
+The main module [`Network.HTTP.Types`](https://hackage.haskell.org/package/http-types/docs/Network-HTTP-Types.html)
+exports everything as well, so you don't have to import the modules separately if you don't want to.
