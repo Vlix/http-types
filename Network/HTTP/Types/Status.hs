@@ -174,7 +174,7 @@ instance Eq Status where
 instance Ord Status where
     compare = compare `on` statusCode
 
--- | Be advised, that when using the \"enumFrom*\" family of methods or
+-- | Be advised, that when using the @enumFrom*@ family of methods or
 -- ranges in lists, it will generate all possible status codes.
 --
 -- E.g. @[status100 .. status200]@ generates 'Status'es of @100, 101, 102 .. 198, 199, 200@
@@ -843,3 +843,4 @@ statusIsServerError = statusIs 5
 
 statusIs :: Int -> Status -> Bool
 statusIs i = (== i) . (`div` 100) . statusCode
+{-# INLINE statusIs #-}
