@@ -52,8 +52,19 @@ checkVersion (str, v1, v2) =
         show v1 `shouldBe` str
         renderHttpVersion v1 `shouldBe` bsStr
         parseHttpVersion bsStr `shouldBe` Right v1
+        patternCheck str v1
   where
     bsStr = fromString str
 
 instance Arbitrary HttpVersion where
     arbitrary = HttpVersion <$> arbitrary <*> arbitrary
+
+patternCheck :: String -> HttpVersion -> Expectation
+patternCheck s v =
+    case v of
+        Http09 -> s `shouldBe` "HTTP/0.9"
+        Http10 -> s `shouldBe` "HTTP/1.0"
+        Http11 -> s `shouldBe` "HTTP/1.1"
+        Http20 -> s `shouldBe` "HTTP/2.0"
+        Http30 -> s `shouldBe` "HTTP/3.0"
+        _ -> expectationFailure $ s ++ " does not have a Pattern Synonym"

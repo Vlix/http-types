@@ -109,18 +109,20 @@ pattern Http30 <- HttpVersion 3 0
 --
 -- @since 0.13
 parseHttpVersion :: ByteString -> Either String HttpVersion
--- This order is from most likely to be checked with this function.
--- HTTP/2 and /3 don't use this format as the version string, they use "h2" and "h3".
-parseHttpVersion "HTTP/1.1" = Right http11
-parseHttpVersion "HTTP/1.0" = Right http10
-parseHttpVersion "HTTP/2.0" = Right http20
-parseHttpVersion "HTTP/3.0" = Right http30
-parseHttpVersion "HTTP/0.9" = Right http09
 parseHttpVersion bs = do
     rest <- note "Not an HTTP protocol version" $ B.stripPrefix "HTTP/" bs
-    (ds, more) <- withDigits "major" rest
-    let majV = unsafeDigitsToInt ds
-    HttpVersion majV <$> getMinorVersion more
+    case rest of
+        -- This order is from most likely to be checked with this function.
+        -- HTTP/2 and /3 don't use this format as the version string, they use "h2" and "h3".
+        "1.1" -> Right http11
+        "1.0" -> Right http10
+        "2.0" -> Right http20
+        "3.0" -> Right http30
+        "0.9" -> Right http09
+        _ -> do
+            (ds, more) <- withDigits "major" rest
+            let majV = unsafeDigitsToInt ds
+            HttpVersion majV <$> getMinorVersion more
   where
     note s = maybe (Left s) Right
     withDigits s rest =
