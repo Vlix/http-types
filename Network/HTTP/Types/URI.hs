@@ -169,7 +169,7 @@ type SimpleQuery = [SimpleQueryItem]
 simpleQueryToQuery :: SimpleQuery -> Query
 simpleQueryToQuery = map (second Just)
 
--- | Renders the given 'Query' into a 'Builder'.
+-- | Renders the given 'Query' into a 'B.Builder'.
 --
 -- If you want a question mark (@?@) added to the front of the result, use 'True'.
 --
@@ -202,7 +202,7 @@ renderQueryBuilder qmark' (p : ps) =
 renderQuery :: Bool -> Query -> B.ByteString
 renderQuery qm = BL.toStrict . B.toLazyByteString . renderQueryBuilder qm
 
--- | Render the given 'SimpleQuery' into a 'ByteString'.
+-- | Render the given 'SimpleQuery' into a 'B.ByteString'.
 --
 -- If you want a question mark (@?@) added to the front of the result, use 'True'.
 --
@@ -262,7 +262,7 @@ breakDiscard seps s =
     let (x, y) = B.break (`B.elem` seps) s
      in (x, B.drop 1 y)
 
--- | Parse 'SimpleQuery' from a 'ByteString'.
+-- | Parse 'SimpleQuery' from a 'B.ByteString'.
 --
 -- This uses 'parseQuery' under the hood, and will transform
 -- any 'Nothing' values into an empty 'B.ByteString'.
@@ -523,7 +523,7 @@ type PartialEscapeQueryItem = (B.ByteString, [EscapeItem])
 -- @since 0.12.1
 type PartialEscapeQuery = [PartialEscapeQueryItem]
 
--- | Convert 'PartialEscapeQuery' to 'ByteString'.
+-- | Convert 'PartialEscapeQuery' to 'B.ByteString'.
 --
 -- If you want a question mark (@?@) added to the front of the result, use 'True'.
 --
