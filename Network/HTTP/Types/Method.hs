@@ -33,7 +33,7 @@ module Network.HTTP.Types.Method (
 where
 
 import Control.Arrow ((|||))
-import Data.Array (Array, Ix, assocs, listArray, (!))
+import Data.Array (Array, Ix, listArray, (!))
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as B8
 import Data.Data (Data)
@@ -53,39 +53,39 @@ import GHC.Generics (Generic)
 -- | HTTP method (flat 'B.ByteString' type).
 type Method = B.ByteString
 
--- | HTTP GET Method
+-- | GET Method
 methodGet :: Method
 methodGet = renderStdMethod GET
 
--- | HTTP POST Method
+-- | POST Method
 methodPost :: Method
 methodPost = renderStdMethod POST
 
--- | HTTP HEAD Method
+-- | HEAD Method
 methodHead :: Method
 methodHead = renderStdMethod HEAD
 
--- | HTTP PUT Method
+-- | PUT Method
 methodPut :: Method
 methodPut = renderStdMethod PUT
 
--- | HTTP DELETE Method
+-- | DELETE Method
 methodDelete :: Method
 methodDelete = renderStdMethod DELETE
 
--- | HTTP TRACE Method
+-- | TRACE Method
 methodTrace :: Method
 methodTrace = renderStdMethod TRACE
 
--- | HTTP CONNECT Method
+-- | CONNECT Method
 methodConnect :: Method
 methodConnect = renderStdMethod CONNECT
 
--- | HTTP OPTIONS Method
+-- | OPTIONS Method
 methodOptions :: Method
 methodOptions = renderStdMethod OPTIONS
 
--- | HTTP PATCH Method
+-- | PATCH Method
 --
 -- @since 0.8.0
 methodPatch :: Method
@@ -96,6 +96,9 @@ methodPatch = renderStdMethod PATCH
 --
 -- @since 0.2.0
 data StdMethod
+    -- These are ordered by suspected frequency. More popular methods should go first.
+    -- The reason is that 'methodList' is used with 'lookup'.
+    -- 'lookup' is probably faster for these few cases than setting up an elaborate data structure.
     = GET
     | POST
     | HEAD
@@ -121,17 +124,11 @@ data StdMethod
           Data
         )
 
--- These are ordered by suspected frequency. More popular methods should go first.
--- The reason is that methodList is used with lookup.
--- lookup is probably faster for these few cases than setting up an elaborate data structure.
-
--- FIXME: listArray (minBound, maxBound) $ fmap fst methodList
 methodArray :: Array StdMethod Method
-methodArray = listArray (minBound, maxBound) $ map (B8.pack . show) [minBound :: StdMethod .. maxBound]
+methodArray = listArray (minBound, maxBound) $ fst <$> methodList
 
--- FIXME: map (\m -> (B8.pack $ show m, m)) [minBound .. maxBound]
 methodList :: [(Method, StdMethod)]
-methodList = map (\(a, b) -> (b, a)) (assocs methodArray)
+methodList = map (\m -> (B8.pack $ show m, m)) [minBound :: StdMethod .. maxBound]
 
 -- | Convert a method 'B.ByteString' to a 'StdMethod' if possible.
 --

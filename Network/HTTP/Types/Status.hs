@@ -8,12 +8,7 @@
 module Network.HTTP.Types.Status (
     -- * HTTP Status
 
-    -- If we ever want to deprecate the 'Status' data constructor:
-    -- #if __GLASGOW_HASKELL__ >= 908
-    --   {-# DEPRECATED "Use 'mkStatus' when constructing a 'Status'" #-} Status(Status)
-    -- #else
     Status (Status),
-    -- #endif
     statusCode,
     statusMessage,
     mkStatus,
@@ -101,6 +96,8 @@ module Network.HTTP.Types.Status (
     tooManyRequests429,
     status431,
     requestHeaderFieldsTooLarge431,
+    status451,
+    unavailableForLegalReasons451,
     status500,
     internalServerError500,
     status501,
@@ -126,6 +123,7 @@ module Network.HTTP.Types.Status (
 
 import Data.ByteString as B (ByteString, empty)
 import Data.Data (Data)
+import Data.Function (on)
 import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 
@@ -161,18 +159,24 @@ data Status = Status
 -- name of the constructor, so that it doesn't clash with the new pattern synonym
 -- that's replacing it.
 --
--- > data Status = MkStatus ...
--- > pattern Status code msg = MkStatus code msg
+-- > {-# LANGUAGE PatternSynonyms #-}
+-- > data Status = MkStatus
+-- > { statusCode :: Int -- ^ 404
+-- > , statusMessage :: B.ByteString -- ^ "Not Found"
+-- > , statusRaw :: B.ByteString -- ^ "404 Not Found"
+-- > }
+-- > pattern Status code msg <- MkStatus code msg _
+-- >   where Status code msg = MkStatus code msg (fromString (show code <> " ") <> msg)
 
 -- | A 'Status' is equal to another 'Status' if the status codes are equal.
 instance Eq Status where
-    Status { statusCode = a } == Status { statusCode = b } = a == b
+    (==) = (==) `on` statusCode
 
 -- | 'Status'es are ordered according to their status codes only.
 instance Ord Status where
-    compare Status { statusCode = a } Status { statusCode = b } = a `compare` b
+    compare = compare `on` statusCode
 
--- | Be advised, that when using the \"enumFrom*\" family of methods or
+-- | Be advised, that when using the @enumFrom*@ family of methods or
 -- ranges in lists, it will generate all possible status codes.
 --
 -- E.g. @[status100 .. status200]@ generates 'Status'es of @100, 101, 102 .. 198, 199, 200@
@@ -223,6 +227,7 @@ instance Enum Status where
     toEnum 428 = status428
     toEnum 429 = status429
     toEnum 431 = status431
+    toEnum 451 = status451
     toEnum 500 = status500
     toEnum 501 = status501
     toEnum 502 = status502
@@ -702,6 +707,20 @@ status431 = mkStatus 431 "Request Header Fields Too Large"
 requestHeaderFieldsTooLarge431 :: Status
 requestHeaderFieldsTooLarge431 = status431
 
+-- | Unavailable For Legal Reasons 451
+-- (<https://tools.ietf.org/html/rfc7725 RFC 7725>)
+--
+-- @since 0.13
+status451 :: Status
+status451 = mkStatus 451 "Unavailable For Legal Reasons"
+
+-- | Unavailable For Legal Reasons 451
+-- (<https://tools.ietf.org/html/rfc7725 RFC 7725>)
+--
+-- @since 0.13
+unavailableForLegalReasons451 :: Status
+unavailableForLegalReasons451 = status451
+
 -- | Internal Server Error 500
 status500 :: Status
 status500 = mkStatus 500 "Internal Server Error"
@@ -790,7 +809,7 @@ networkAuthenticationRequired511 = status511
 --
 -- @since 0.8.0
 statusIsInformational :: Status -> Bool
-statusIsInformational (Status {statusCode=code}) = code >= 100 && code < 200
+statusIsInformational = statusIs 1
 
 -- | Successful class
 --
@@ -798,7 +817,7 @@ statusIsInformational (Status {statusCode=code}) = code >= 100 && code < 200
 --
 -- @since 0.8.0
 statusIsSuccessful :: Status -> Bool
-statusIsSuccessful (Status {statusCode=code}) = code >= 200 && code < 300
+statusIsSuccessful = statusIs 2
 
 -- | Redirection class
 --
@@ -806,7 +825,7 @@ statusIsSuccessful (Status {statusCode=code}) = code >= 200 && code < 300
 --
 -- @since 0.8.0
 statusIsRedirection :: Status -> Bool
-statusIsRedirection (Status {statusCode=code}) = code >= 300 && code < 400
+statusIsRedirection = statusIs 3
 
 -- | Client Error class
 --
@@ -814,7 +833,7 @@ statusIsRedirection (Status {statusCode=code}) = code >= 300 && code < 400
 --
 -- @since 0.8.0
 statusIsClientError :: Status -> Bool
-statusIsClientError (Status {statusCode=code}) = code >= 400 && code < 500
+statusIsClientError = statusIs 4
 
 -- | Server Error class
 --
@@ -822,4 +841,8 @@ statusIsClientError (Status {statusCode=code}) = code >= 400 && code < 500
 --
 -- @since 0.8.0
 statusIsServerError :: Status -> Bool
-statusIsServerError (Status {statusCode=code}) = code >= 500 && code < 600
+statusIsServerError = statusIs 5
+
+statusIs :: Int -> Status -> Bool
+statusIs i = (== i) . (`div` 100) . statusCode
+{-# INLINE statusIs #-}
