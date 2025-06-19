@@ -6,7 +6,7 @@
 -- The HTTP standard defines a set of standard methods, when to use them,
 -- and how to handle them. The standard set has been provided as a separate
 -- data type 'StdMethod', but since you can also use custom methods, the
--- basic type 'Method' is just a synonym for 'ByteString'.
+-- basic type 'Method' is just a synonym for 'B.ByteString'.
 module Network.HTTP.Types.Method (
     -- * HTTP methods
     Method,
@@ -50,7 +50,7 @@ import GHC.Generics (Generic)
 --     arbitrary = encodeUtf8 . pack <$> arbitrary
 -- :}
 
--- | HTTP method (flat 'ByteString' type).
+-- | HTTP method (flat 'B.ByteString' type).
 type Method = B.ByteString
 
 -- | HTTP GET Method
@@ -133,13 +133,13 @@ methodArray = listArray (minBound, maxBound) $ map (B8.pack . show) [minBound ::
 methodList :: [(Method, StdMethod)]
 methodList = map (\(a, b) -> (b, a)) (assocs methodArray)
 
--- | Convert a method 'ByteString' to a 'StdMethod' if possible.
+-- | Convert a method 'B.ByteString' to a 'StdMethod' if possible.
 --
 -- @since 0.2.0
 parseMethod :: Method -> Either B.ByteString StdMethod
 parseMethod bs = maybe (Left bs) Right $ lookup bs methodList
 
--- | Convert an algebraic method to a 'ByteString'.
+-- | Convert an algebraic method to a 'B.ByteString'.
 --
 -- prop> renderMethod (parseMethod bs) == bs
 --
@@ -147,7 +147,7 @@ parseMethod bs = maybe (Left bs) Right $ lookup bs methodList
 renderMethod :: Either B.ByteString StdMethod -> Method
 renderMethod = id ||| renderStdMethod
 
--- | Convert a 'StdMethod' to a 'ByteString'.
+-- | Convert a 'StdMethod' to a 'B.ByteString'.
 --
 -- @since 0.2.0
 renderStdMethod :: StdMethod -> Method
