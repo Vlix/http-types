@@ -64,6 +64,7 @@ import Data.STRef (modifySTRef, newSTRef, readSTRef)
 import Network.HTTP.Header.Internal
 import Network.HTTP.LowLevel (
     copyByteArrayToAddr,
+    finalShift,
     indexWord8Array,
     indexWord8OffRawAddr,
     isBadChar,
@@ -155,7 +156,7 @@ toHeaderNameStrict bs =
     !(W64# zero#) = 0
     !(W64# one#) = 1
     size = B.length bs
-    !(I# finalShift#) = 64 - (size .&. 0xBF) -- bitmask of (0011 1111)
+    !(I# finalShift#) = finalShift size
     go mkBitmapRef (Ptr addr#) mba =
         loop zero# 0#
       where
@@ -240,31 +241,34 @@ parseHeaderNameFromString s
     | otherwise =
         Right (runST $ newByteArray len >>= go)
   where
-    isBadChar' c
-        | c > '\xFF' = True
-        | otherwise = isBadChar $ c2w c
+    isBadChar' c = c > '\xFF' || isBadChar (c2w c)
     len = length s
     !(W64# zero#) = 0
     !(W64# one#) = 1
+    !(I# finalShift#) = finalShift len
     go mba = loop id zero# 0# s
       where
         loop mkBitmap bitmap# _ [] = do
             ba <- unsafeFreezeByteArray mba
-            let finalBitmap = mkBitmap (OneWord (W64# bitmap#))
+            let finalBitmap = mkBitmap (OneWord (W64# (bitmap# `uncheckedShiftL64#` finalShift#)))
             pure (HeaderName Nothing ba finalBitmap)
         loop mkBitmap bitmap# ix# (c : cs) = do
             writeWord8Array mba ix# convertedChar#
             let nextLen# = ix# +# 1#
-                newBitmap# =
-                    if isTrue# (originalChar# `eqWord8#` convertedChar#)
-                        then bitmap#
-                        else bitmap# `or64#` one#
-                newMkBitmap =
+                nextMkBitmap =
                     if isMod64 (I# nextLen#)
                         then mkBitmap . MoreWords (W64# newBitmap#)
-                        else undefined
-            loop newMkBitmap zero# nextLen# cs
+                        else mkBitmap
+                nextBitmap# =
+                    if I# nextLen# == len
+                        then newBitmap#
+                        else newBitmap# `uncheckedShiftL64#` 1#
+            loop nextMkBitmap nextBitmap# nextLen# cs
           where
+            newBitmap# =
+                if isTrue# (originalChar# `eqWord8#` convertedChar#)
+                    then bitmap#
+                    else bitmap# `or64#` one#
             charInt = ord c
             !(W8# originalChar#) = fromIntegral charInt
             convertedChar# = indexWord8OffRawAddr strictIndex (fromIntegral (W8# originalChar#))

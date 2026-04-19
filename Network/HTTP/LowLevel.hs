@@ -134,3 +134,7 @@ isValidHeaderName (HeaderName _ arr@(ByteArray ba) _) =
 isMod64 :: Int -> Bool
 isMod64 i = i .&. 0xBF == 0
 {-# INLINE isMod64 #-}
+
+finalShift :: Int -> Int
+finalShift size = 64 - (size .&. 0xBF) -- bitmask of (0011 1111)
+{-# INLINE finalShift #-}
