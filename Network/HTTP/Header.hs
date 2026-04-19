@@ -29,13 +29,17 @@ module Network.HTTP.Header (
     unsafeParseHeaderName,
     unsafeParseNewHeaderName,
 
+    -- ** String functions
+    parseHeaderNameFromString,
+    headerNameToString,
+
     -- ** Common Header Names
 ) where
 
 -- hAcceptLanguage,
 
 import Control.Exception (throw, try)
-import Control.Monad.ST (ST, runST, stToIO)
+import Control.Monad.ST (runST, stToIO)
 import Data.Array.Byte (ByteArray (..))
 import qualified Data.ByteString as B (ByteString, length)
 import Data.ByteString.Internal (c2w, unsafeCreate, w2c)
@@ -56,13 +60,14 @@ import GHC.IO.Unsafe (unsafeDupablePerformIO)
 import GHC.Word (Word64 (..), Word8 (..))
 
 import Control.Monad (when)
+import Data.STRef (modifySTRef, newSTRef, readSTRef)
 import Network.HTTP.Header.Internal
 import Network.HTTP.LowLevel (
     copyByteArrayToAddr,
     indexWord8Array,
     indexWord8OffRawAddr,
     isBadChar,
-    longHeader,
+    isMod64,
     newByteArray,
     strictIndex,
     toHeaderNameHelper,
@@ -142,42 +147,50 @@ unsafeParseHeaderName' hdr mkHeader
 {-# INLINE unsafeParseHeaderName' #-}
 
 toHeaderNameStrict :: B.ByteString -> IO (ByteArray, Bitmap)
-toHeaderNameStrict bs
-    | size > 64 = longHeader bs
-    | otherwise = withNewByteArray bs go
+toHeaderNameStrict bs =
+    withNewByteArray bs $ \ptr mba -> do
+        mkBitmapRef <- newSTRef (id :: Bitmap -> Bitmap)
+        go mkBitmapRef ptr mba
   where
     !(W64# zero#) = 0
     !(W64# one#) = 1
     size = B.length bs
-    !(I# finalShift#) = 64 - size
-    go (Ptr addr#) mba = do
+    !(I# finalShift#) = 64 - (size .&. 0xBF) -- bitmask of (0011 1111)
+    go mkBitmapRef (Ptr addr#) mba =
         loop zero# 0#
       where
-        -- loop :: Word64# -> Int# -> ST s (ByteArray, Bitmap)
         loop bitmap# ix# = do
             when (W8# convertedChar# == 0xFF) $
                 throw (InvalidFieldNameByte bs (w2c (W8# originalChar#)))
             writeWord8Array mba ix# convertedChar#
-            let newBitmap =
+            let newBitmap# =
                     if isTrue# (originalChar# `eqWord8#` convertedChar#)
                         then bitmap#
                         else bitmap# `or64#` one#
             if I# nextLen# == size
                 then do
                     ba <- unsafeFreezeByteArray mba
-                    let !finishedBitmap = newBitmap `uncheckedShiftL64#` finalShift#
-                    pure (ba, OneWord (W64# finishedBitmap))
+                    mkBitmap <- readSTRef mkBitmapRef
+                    let finalBitmap = newBitmap# `uncheckedShiftL64#` finalShift#
+                        !finishedBitmap =
+                            mkBitmap $ OneWord (W64# finalBitmap)
+                    pure (ba, finishedBitmap)
                 else do
-                    let nextBitmap# = newBitmap `uncheckedShiftL64#` 1#
+                    W64# nextBitmap# <- updateRef (W64# newBitmap#)
                     loop nextBitmap# nextLen#
           where
             !(# originalChar#, convertedChar#, nextLen# #) =
                 toHeaderNameHelper strictIndex addr# ix#
+            updateRef newBitmap@(W64# w64)
+                | isMod64 (I# nextLen#) =
+                    0 <$ modifySTRef mkBitmapRef (. MoreWords newBitmap)
+                | otherwise = pure (W64# (w64 `uncheckedShiftL64#` 1#))
 {-# INLINE toHeaderNameStrict #-}
 
 headerNameToString :: HeaderName -> String
 headerNameToString (HeaderName _ arr bm)
-    | bm == 0 = undefined arr
+    | bitmapIsZero bm = undefined arr
+    | otherwise = undefined
 
 -- | Turns the 'HeaderName' into a case-sensitive 'B.ByteString'.
 --
@@ -194,53 +207,63 @@ encodeHeaderName (HeaderName _ arr@(ByteArray ba) bm) =
   where
     baLen = I# (sizeofByteArray# ba)
     firstBit = 0x8000_0000_0000_0000
-    loop ix bitmap ptr =
-        let w8 = indexWord8Array arr ix
-            char =
-                if bitmap .&. firstBit == 0
-                    then w8
-                    else w8 - 0x20
-            newIx = ix + 1
-         in do
-                poke ptr char
-                if newIx == baLen
-                    then pure ()
-                    else loop newIx (bitmap `unsafeShiftL` 1) (ptr `plusPtr` 1)
+    loop ix bitmap ptr = do
+        poke ptr char
+        if newIx == baLen
+            then pure ()
+            else loop newIx nextBitmap (ptr `plusPtr` 1)
+      where
+        w8 = indexWord8Array arr ix
+        getW64 (OneWord w64) = w64
+        getW64 (MoreWords w64 _) = w64
+        char =
+            if getW64 bitmap .&. firstBit == 0
+                then w8
+                else w8 - 0x20
+        nextBitmap =
+            case bitmap of
+                MoreWords w64 next
+                    | isMod64 newIx -> next
+                    | otherwise ->
+                        MoreWords (w64 `unsafeShiftL` 1) next
+                OneWord w64 -> OneWord (w64 `unsafeShiftL` 1)
+        newIx = ix + 1
 
 -- hAcceptLanguage :: HeaderName
 -- hAcceptLanguage = parseHeaderName "Accept-Language"
 
 parseHeaderNameFromString :: String -> Either (HeaderNameException String) HeaderName
-parseHeaderNameFromString [] =
-    Left (EmptyHeader :: HeaderNameException String)
-parseHeaderNameFromString s =
-    case find isBadChar' s of
-        Just c -> throwIllegal c
-        Nothing ->
-            runST $ newByteArray len >>= go
+parseHeaderNameFromString [] = Left EmptyHeader
+parseHeaderNameFromString s
+    | Just c <- find isBadChar' s =
+        Left (InvalidFieldNameByte s c)
+    | otherwise =
+        Right (runST $ newByteArray len >>= go)
   where
     isBadChar' c
         | c > '\xFF' = True
         | otherwise = isBadChar $ c2w c
-    throwIllegal c = throw (InvalidFieldNameByte s c)
     len = length s
     !(W64# zero#) = 0
     !(W64# one#) = 1
-    go mba = loop zero# 0# s
+    go mba = loop id zero# 0# s
       where
-        loop bitmap# _ [] = do
+        loop mkBitmap bitmap# _ [] = do
             ba <- unsafeFreezeByteArray mba
-            pure (HeaderName Nothing ba (W64# bitmap#))
-        loop bitmap# ix# (c : cs)
-            | charInt > 0xFF || W8# convertedChar# == 0xFF =
-                throwIllegal c
-            | otherwise = do
-                writeWord8Array mba ix# convertedChar#
-                let newBitmap# =
-                        if isTrue# (originalChar# `eqWord8#` convertedChar#)
-                            then bitmap#
-                            else bitmap# `or64#` one#
-                loop newBitmap# (ix# +# 1#) cs
+            let finalBitmap = mkBitmap (OneWord (W64# bitmap#))
+            pure (HeaderName Nothing ba finalBitmap)
+        loop mkBitmap bitmap# ix# (c : cs) = do
+            writeWord8Array mba ix# convertedChar#
+            let nextLen# = ix# +# 1#
+                newBitmap# =
+                    if isTrue# (originalChar# `eqWord8#` convertedChar#)
+                        then bitmap#
+                        else bitmap# `or64#` one#
+                newMkBitmap =
+                    if isMod64 (I# nextLen#)
+                        then mkBitmap . MoreWords (W64# newBitmap#)
+                        else undefined
+            loop newMkBitmap zero# nextLen# cs
           where
             charInt = ord c
             !(W8# originalChar#) = fromIntegral charInt

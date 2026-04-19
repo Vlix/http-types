@@ -4,14 +4,10 @@
 
 module Network.HTTP.LowLevel where
 
-import Control.Exception (assert, throw)
-import Control.Monad (when)
 import Control.Monad.ST (stToIO)
 import Data.Array.Byte (ByteArray (..), MutableByteArray (..))
 import Data.Bits ((.&.))
-import qualified Data.ByteString as B
-import Data.ByteString.Internal (ByteString (BS), w2c)
-import Data.STRef (modifySTRef, newSTRef, readSTRef)
+import Data.ByteString.Internal (ByteString (BS))
 import Foreign (withForeignPtr)
 import GHC.Exts (
     Addr#,
@@ -21,19 +17,15 @@ import GHC.Exts (
     RealWorld,
     Word8#,
     copyByteArrayToAddr#,
-    eqWord8#,
     indexWord8Array#,
     indexWord8OffAddr#,
-    isTrue#,
     newByteArray#,
-    or64#,
     sizeofByteArray#,
-    uncheckedShiftL64#,
     unsafeFreezeByteArray#,
     writeWord8Array#,
  )
 import GHC.ST (ST (..))
-import GHC.Word (Word64 (..), Word8 (..))
+import GHC.Word (Word8 (..))
 import Network.HTTP.Header.Internal
 
 data RawAddr = RawAddr Addr#
@@ -119,54 +111,6 @@ toHeaderNameHelper index addr charIx =
     convertedChar = indexWord8OffRawAddr index (fromIntegral (W8# originalChar))
 {-# INLINE toHeaderNameHelper #-}
 
--- | UNSAFE HELPER FUNCTION
---
--- Should ONLY be used with bytestring longer than 64 bytes.
---
--- NEVER INLINE! As this is the exception to the norm
-longHeader :: ByteString -> IO (ByteArray, Bitmap)
-longHeader bs =
-    assert (size > 64) $
-        withNewByteArray bs $ \ptr mba -> do
-            mkBitmapRef <- newSTRef (id :: Bitmap -> Bitmap)
-            go mkBitmapRef ptr mba
-  where
-    !(W64# zero#) = 0
-    !(W64# one#) = 1
-    size = B.length bs
-    !(I# finalShift#) = 64 - (size .&. 0xBF) -- bitmask of (0011 1111)
-    go mkBitmapRef (Ptr addr#) mba =
-        loop zero# 0#
-      where
-        loop bitmap# ix# = do
-            when (W8# convertedChar# == 0xFF) $
-                throw (InvalidFieldNameByte bs (w2c (W8# originalChar#)))
-            writeWord8Array mba ix# convertedChar#
-            let newBitmap =
-                    if isTrue# (originalChar# `eqWord8#` convertedChar#)
-                        then bitmap#
-                        else bitmap# `or64#` one#
-            if I# nextLen# == size
-                then do
-                    ba <- unsafeFreezeByteArray mba
-                    mkBitmap <- readSTRef mkBitmapRef
-                    let finalBitmap = newBitmap `uncheckedShiftL64#` finalShift#
-                        !finishedBitmap =
-                            mkBitmap $ OneWord (W64# finalBitmap)
-                    pure (ba, finishedBitmap)
-                else do
-                    let nextBitmap# = newBitmap `uncheckedShiftL64#` 1#
-                    W64# newBitmap# <- updateRef (W64# nextBitmap#)
-                    loop newBitmap# nextLen#
-          where
-            !(# originalChar#, convertedChar#, nextLen# #) =
-                toHeaderNameHelper strictIndex addr# ix#
-            updateRef nextBitmap
-                | I# nextLen# .&. 0xBF == 0 =
-                    0 <$ modifySTRef mkBitmapRef (. MoreWords nextBitmap)
-                | otherwise = pure nextBitmap
-{-# NOINLINE longHeader #-}
-
 -- | Checks for any illegal bytes.
 --
 --   * 'True': Valid header name
@@ -186,3 +130,7 @@ isValidHeaderName (HeaderName _ arr@(ByteArray ba) _) =
         | ix == baLen = True
         | isBadChar (indexWord8Array arr ix) = False
         | otherwise = loop (ix + 1)
+
+isMod64 :: Int -> Bool
+isMod64 i = i .&. 0xBF == 0
+{-# INLINE isMod64 #-}

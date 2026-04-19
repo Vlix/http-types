@@ -12,7 +12,7 @@ main = hspec spec
 -- | Round trip test that doesn't hold on to the original 'ByteString'
 headerRoundtrip :: ByteString -> Expectation
 headerRoundtrip bs =
-    let hdr = unsafeNewHeaderName bs
+    let hdr = unsafeParseNewHeaderName bs
      in encodeHeaderName hdr `shouldBe` bs
 
 spec :: Spec
@@ -22,5 +22,5 @@ spec =
             headerRoundtrip "TE"
             headerRoundtrip "Accept-Language"
             headerRoundtrip "X-Permitted-Cross-Domain-Policies"
-            headerRoundtrip "Some-Weird-Header-That-For-Some-Reason-Is-Longer-Than-64-Characters"
+            headerRoundtrip "Some-Weird-Header-That-For-Some-Reason-Is-Longer-Than-64-CharacterS"
             headerRoundtrip "test-with-lowercase"
