@@ -1,5 +1,4 @@
 {-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NumericUnderscores #-}
 
@@ -14,13 +13,10 @@ import Data.List (intercalate)
 import Data.Typeable (Typeable)
 import Data.Word (Word64)
 
+-- | HTTP Field Name (Header name)
 data HeaderName
-    = -- | Header up to 64 bytes (which is almost every official one)
-      HeaderName (Maybe B.ByteString) !ByteArray !Bitmap
+    = HeaderName (Maybe B.ByteString) !ByteArray !Bitmap
     deriving (Eq, Show)
-
--- Headers longer than 64 bytes (probably only custom headers)
---   LongHeaderName (CI B.ByteString)
 
 data Bitmap
     = OneWord !Word64
@@ -72,12 +68,6 @@ data HeaderNameException s
     deriving (Eq, Show)
 
 instance (Show s, Typeable s) => Exception (HeaderNameException s)
-
-newtype LenientHeaderName = Lenient HeaderName
-    deriving newtype (Eq, Show)
-
-emptyHeaderName :: LenientHeaderName
-emptyHeaderName = Lenient $ HeaderName Nothing mempty (OneWord 0)
 
 arrayFromHeaderName :: HeaderName -> ByteArray
 arrayFromHeaderName = undefined

@@ -22,14 +22,6 @@ module Network.HTTP.Header (
     parseNewHeaderName,
     encodeHeaderName,
 
-    -- *** Lenient versions
-
-    -- | The lenient functions will parse any header name while maintaining
-    -- case-insensitivity.
-    parseHeaderNameLenient,
-    parseNewHeaderNameLenient,
-    isValidHeaderName,
-
     -- *** Unsafe versions
 
     -- | These functions will throw an exception if they encounter an illegal
@@ -51,14 +43,9 @@ import Data.Char (ord)
 import Data.List (find)
 import Foreign (Bits (..), Storable (..), plusPtr)
 import GHC.Exts (
-    Addr#,
     Int (..),
-    Int#,
     Ptr (..),
-    Word64#,
-    Word8#,
     eqWord8#,
-    indexWord8OffAddr#,
     isTrue#,
     or64#,
     sizeofByteArray#,
@@ -71,12 +58,10 @@ import GHC.Word (Word64 (..), Word8 (..))
 import Control.Monad (when)
 import Network.HTTP.Header.Internal
 import Network.HTTP.LowLevel (
-    RawAddr,
     copyByteArrayToAddr,
     indexWord8Array,
     indexWord8OffRawAddr,
     isBadChar,
-    lenientIndex,
     longHeader,
     newByteArray,
     strictIndex,
@@ -190,63 +175,6 @@ toHeaderNameStrict bs
                 toHeaderNameHelper strictIndex addr# ix#
 {-# INLINE toHeaderNameStrict #-}
 
--- | Creates a 'HeaderName' that holds on to the original 'B.ByteString'
--- for later reuse.
---
--- Does /not/ check for invalid bytes and will silently return an empty
--- 'HeaderName' if the provided 'B.ByteString' is empty.
---
--- (cf. definition of field name tokens <https://www.rfc-editor.org/rfc/rfc9110.html#section-5.6.2>)
-parseHeaderNameLenient :: B.ByteString -> LenientHeaderName
-parseHeaderNameLenient hdr =
-    parseHeaderNameLenient' hdr $ \(ba, bitmap) ->
-        Lenient (HeaderName (Just hdr) ba bitmap)
-
--- | Creates a 'HeaderName' /without/ holding on to the original 'B.ByteString'
--- which could lead to quicker garbage collection.
---
--- Does /not/ check for invalid bytes and will silently return an empty
--- 'HeaderName' if the provided 'B.ByteString' is empty.
---
--- (cf. definition of field name tokens <https://www.rfc-editor.org/rfc/rfc9110.html#section-5.6.2>)
-parseNewHeaderNameLenient :: B.ByteString -> LenientHeaderName
-parseNewHeaderNameLenient hdr =
-    parseHeaderNameLenient' hdr $ \(ba, bitmap) ->
-        Lenient (HeaderName Nothing ba bitmap)
-
-parseHeaderNameLenient' :: B.ByteString -> ((ByteArray, Bitmap) -> LenientHeaderName) -> LenientHeaderName
-parseHeaderNameLenient' hdr mkHeader
-    | size <= 0 = emptyHeaderName
-    | otherwise =
-        unsafeDupablePerformIO $
-            mkHeader <$> withNewByteArray hdr go
-  where
-    !(W64# zero#) = 0
-    !(W64# one#) = 1
-    size = B.length hdr
-    !(I# finalShift#) = 64 - size
-    go (Ptr addr#) mba =
-        loop zero# 0#
-      where
-        loop bitmap# ix# = do
-            writeWord8Array mba ix# convertedChar#
-            let newBitmap =
-                    if isTrue# (originalChar# `eqWord8#` convertedChar#)
-                        then bitmap#
-                        else bitmap# `or64#` one#
-            if I# ix# == size
-                then do
-                    ba <- unsafeFreezeByteArray mba
-                    let !finishedBitmap = newBitmap `uncheckedShiftL64#` finalShift#
-                    pure (ba, W64# finishedBitmap)
-                else do
-                    let nextBitmap# = newBitmap `uncheckedShiftL64#` 1#
-                    loop nextBitmap# nextLen#
-          where
-            !(# originalChar#, convertedChar#, nextLen# #) =
-                toHeaderNameHelper lenientIndex addr# ix#
-{-# INLINE parseHeaderNameLenient' #-}
-
 headerNameToString :: HeaderName -> String
 headerNameToString (HeaderName _ arr bm)
     | bm == 0 = undefined arr
@@ -278,26 +206,6 @@ encodeHeaderName (HeaderName _ arr@(ByteArray ba) bm) =
                 if newIx == baLen
                     then pure ()
                     else loop newIx (bitmap `unsafeShiftL` 1) (ptr `plusPtr` 1)
-
--- | Checks for any illegal bytes.
---
---   * 'True': Valid header name
---   * 'False': Bad header name
---
--- [HTTP Field Names](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.6.2)
--- only allow visible characters that are _not_ delimiters. (though the
--- convention is to only use alpha-numeric characters and the minus character)
-isValidHeaderName :: HeaderName -> Bool
-isValidHeaderName (HeaderName _ arr@(ByteArray ba) _) =
-    case baLen of
-        0 -> False
-        _ -> loop 0
-  where
-    baLen = I# (sizeofByteArray# ba)
-    loop ix
-        | ix == baLen = True
-        | isBadChar (indexWord8Array arr ix) = False
-        | otherwise = loop (ix + 1)
 
 -- hAcceptLanguage :: HeaderName
 -- hAcceptLanguage = parseHeaderName "Accept-Language"
