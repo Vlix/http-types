@@ -31,8 +31,8 @@ Source-repository head
   location: https://github.com/Vlix/http-types.git
 
 Library
+  hs-source-dirs:      src
   Exposed-modules:     Network.HTTP.Header
-                       Network.HTTP.Header.Internal
                        Network.HTTP.Types
                        Network.HTTP.Types.Header
                        Network.HTTP.Types.Method
@@ -41,6 +41,7 @@ Library
                        Network.HTTP.Types.URI
                        Network.HTTP.Types.Version
   Other-modules:       Network.HTTP.LowLevel
+                       Network.HTTP.Header.Internal
   GHC-Options:         -Wall
   Build-depends:       base >= 4.17 && < 5,
                        bytestring >= 0.10.6.0 && < 1,
@@ -51,24 +52,34 @@ Library
 
 Test-suite spec
   main-is:             Spec.hs
-  hs-source-dirs:      test
-  other-modules:       Network.HTTP.HeaderSpec
+  hs-source-dirs:      test, src
+  other-modules:       Network.HTTP.Header
+                       Network.HTTP.HeaderSpec
+                       Network.HTTP.Header.Internal
+                       Network.HTTP.LowLevel
+                       Network.HTTP.Types
+                       Network.HTTP.Types.Header
                        Network.HTTP.Types.HeaderSpec
+                       Network.HTTP.Types.Method
                        Network.HTTP.Types.MethodSpec
+                       Network.HTTP.Types.QueryLike
+                       Network.HTTP.Types.Status
                        Network.HTTP.Types.StatusSpec
+                       Network.HTTP.Types.URI
                        Network.HTTP.Types.URISpec
+                       Network.HTTP.Types.Version
                        Network.HTTP.Types.VersionSpec
   type:                exitcode-stdio-1.0
   GHC-Options:         -Wall
   default-language:    Haskell2010
   build-tool-depends:  hspec-discover:hspec-discover
   build-depends:       base < 5,
+                       array,
                        bytestring,
                        case-insensitive,
                        filepath,
                        hspec >= 1.3,
                        hspec-golden >= 0.2,
-                       http-types,
                        QuickCheck,
                        quickcheck-instances,
                        text
