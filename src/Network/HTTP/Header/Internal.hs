@@ -33,9 +33,11 @@ data HeaderName
     = HeaderName (Maybe B.ByteString) !ByteArray !Bitmap
     deriving (Eq, Show)
 
+-- | Access the inner 'ByteArray' of the 'HeaderName'
 unsafeGetByteArray :: HeaderName -> ByteArray
 unsafeGetByteArray (HeaderName _ ba _) = ba
 
+-- | Access the inner 'ByteString' of the 'HeaderName'
 unsafeGetByteString :: HeaderName -> Maybe B.ByteString
 unsafeGetByteString (HeaderName mbs _ _) = mbs
 
@@ -66,11 +68,15 @@ instance Show Bitmap where
       where
         rest = intercalate "-" $ w64s <$> bitmapToList ws
 
+-- | Turn bitmap into a list of words.
+--
+-- Will never be '[]'.
 bitmapToList :: Bitmap -> [Word64]
 bitmapToList = \case
     OneWord w64 -> [w64]
     MoreWords w64 bm -> w64 : bitmapToList bm
 
+-- | Turn 'Word64' into a hexadecimal string representing the bytes.
 w64s :: Word64 -> String
 w64s =
     loop 16 []

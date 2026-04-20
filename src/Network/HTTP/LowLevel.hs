@@ -28,8 +28,11 @@ import GHC.Exts (
 import GHC.ST (ST (..))
 import GHC.Word (Word8 (..))
 
+-- | Carrier for a raw 'Addr#'
 data RawAddr = RawAddr Addr#
 
+-- | A 64-byte mapping of which bytes in the 8-bit range are valid and
+-- what to map them to when producing case-insensitive 'ByteArray's.
 strictIndex :: RawAddr
 strictIndex =
     RawAddr
@@ -51,34 +54,40 @@ strictIndex =
         \\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"#
 {-# INLINE strictIndex #-}
 
+-- | Get a byte from a specific index
 indexWord8Array :: ByteArray -> Int -> Word8
 indexWord8Array (ByteArray ba) (I# ix) =
     W8# (indexWord8Array# ba ix)
 {-# INLINE indexWord8Array #-}
 
+-- | Look up a byte using a specific index
 indexWord8OffRawAddr :: RawAddr -> Int -> Word8#
 indexWord8OffRawAddr (RawAddr addr#) (I# i#) =
     indexWord8OffAddr# addr# i#
 {-# INLINE indexWord8OffRawAddr #-}
 
+-- | Creating a new 'ByteArray'
 newByteArray :: Int -> ST s (MutableByteArray s)
 newByteArray (I# len) = ST $ \s ->
     case newByteArray# len s of
         (# s2, mba #) -> (# s2, MutableByteArray mba #)
 {-# INLINE newByteArray #-}
 
+-- | Set a byte of a specific index in a 'MutableByteArray'
 writeWord8Array :: MutableByteArray s -> Int# -> Word8# -> ST s ()
 writeWord8Array (MutableByteArray mba) ix byte = ST $ \s ->
     case writeWord8Array# mba ix byte s of
         s2 -> (# s2, () #)
 {-# INLINE writeWord8Array #-}
 
+-- | Finish a 'ByteArray'
 unsafeFreezeByteArray :: MutableByteArray s -> ST s ByteArray
 unsafeFreezeByteArray (MutableByteArray mba) = ST $ \s ->
     case unsafeFreezeByteArray# mba s of
         (# s2, ba #) -> (# s2, ByteArray ba #)
 {-# INLINE unsafeFreezeByteArray #-}
 
+-- | Convenience function to create a 'ByteArray' from a 'ByteString'
 withNewByteArray :: ByteString -> (Ptr Word8 -> MutableByteArray RealWorld -> ST RealWorld a) -> IO a
 withNewByteArray (BS fptr size) f =
     withForeignPtr fptr $ \ptr ->
@@ -87,7 +96,14 @@ withNewByteArray (BS fptr size) f =
             f ptr mba
 {-# INLINE withNewByteArray #-}
 
--- | @src offset dst length@
+-- | Amount of bytes in 'ByteArray'
+sizeOfByteArray :: ByteArray -> Int
+sizeOfByteArray (ByteArray arr) = I# (sizeofByteArray# arr)
+{-# INLINE sizeOfByteArray #-}
+
+-- | Copy a 'ByteArray' into a 'Ptr' (e.g. when creating a 'ByteString')
+--
+-- @src offset dst length@
 copyByteArrayToAddr :: ByteArray -> Ptr Word8 -> ST s ()
 copyByteArrayToAddr (ByteArray ba) (Ptr ptr) =
     ST $ \s ->
@@ -97,11 +113,13 @@ copyByteArrayToAddr (ByteArray ba) (Ptr ptr) =
     len = sizeofByteArray# ba
 {-# INLINE copyByteArrayToAddr #-}
 
+-- | Is the byte a legal 'HeaderName' byte.
 isBadChar :: Word8 -> Bool
 isBadChar char =
     W8# (indexWord8OffRawAddr strictIndex (fromIntegral char)) == 0xFF
 {-# INLINE isBadChar #-}
 
+-- | Helper to grab and combine the bytes used in parsing 'HeaderName's
 toHeaderNameHelper :: RawAddr -> Addr# -> Int# -> (# Word8#, Word8#, Int# #)
 toHeaderNameHelper index addr charIx =
     (# originalChar, convertedChar, nextLen #)
@@ -111,17 +129,19 @@ toHeaderNameHelper index addr charIx =
     convertedChar = indexWord8OffRawAddr index (fromIntegral (W8# originalChar))
 {-# INLINE toHeaderNameHelper #-}
 
+-- | Checking if the first 6 bits of an integer are zero.
+--
+-- (used to quickly check if we're at the end of a 'Bitmap')
 isMod64 :: Int -> Bool
 isMod64 i = i .&. 0xBF == 0
 {-# INLINE isMod64 #-}
 
+-- | 'Bitmap's start at the most significant side of the word,
+-- so this is the amount the final word will have to be shifted
+-- given the total size of the 'ByteArray'
 finalShift :: Int -> Int
 finalShift size = 64 - (size .&. 0xBF) -- bitmask of (0011 1111)
 {-# INLINE finalShift #-}
-
-sizeOfByteArray :: ByteArray -> Int
-sizeOfByteArray (ByteArray arr) = I# (sizeofByteArray# arr)
-{-# INLINE sizeOfByteArray #-}
 
 -- | Folding over a 'ByteArray' from right to left.
 foldByteArrayR :: (Word8 -> a -> a) -> a -> ByteArray -> a

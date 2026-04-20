@@ -1,6 +1,6 @@
 Cabal-version:       2.2
 Name:                http-types
-Version:             0.12.5
+Version:             0.13.0
 Synopsis:            Generic HTTP types for Haskell (for both client and server code).
 Description:         Types and functions to describe and handle HTTP concepts.
                      Including "methods", "headers", "query strings", "paths" and "HTTP versions".
