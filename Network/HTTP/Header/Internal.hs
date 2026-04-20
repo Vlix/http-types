@@ -17,10 +17,32 @@ import GHC.Exts (Int (..), sizeofByteArray#)
 import Network.HTTP.LowLevel
 
 -- | HTTP Field Name (Header name)
+--
+-- Technically, this is implemented as a raw 'ByteArray'.
+-- The 'ByteArray' is always lower-case and only contains
+-- valid bytes for an HTTP Field Name.
+--
+-- The 'HeaderName' also contains a bitmapping of which
+-- bytes were originally upper-case, but is only used in
+-- HTTP/1 when showing/encoding the header name.
+--
+-- For efficiency, the 'HeaderName' can also hold on to
+-- the original 'ByteString' from which it was parsed.
+-- (/if it was parsed from a 'ByteString', of course/)
 data HeaderName
     = HeaderName (Maybe B.ByteString) !ByteArray !Bitmap
     deriving (Eq, Show)
 
+unsafeGetByteArray :: HeaderName -> ByteArray
+unsafeGetByteArray (HeaderName _ ba _) = ba
+
+unsafeGetByteString :: HeaderName -> Maybe B.ByteString
+unsafeGetByteString (HeaderName mbs _ _) = mbs
+
+-- | Bits from "left-to-right" that show which bytes were
+-- originally upper-case.
+--
+-- Equivalent to @NonEmpty Word64@.
 data Bitmap
     = OneWord !Word64
     | MoreWords !Word64 !Bitmap
@@ -59,10 +81,10 @@ w64s =
     loop :: Int -> String -> Word64 -> String
     loop i acc w64
         | i == 0 = acc
-        | otherwise = loop (i - 1) (b2c byte : acc) nextW64
+        | otherwise = loop (i - 1) (b2c byte : acc) nextByte
       where
         byte = w64 .&. 0x0000_0000_0000_000F
-        nextW64 = w64 `unsafeShiftR` 4
+        nextByte = w64 `unsafeShiftR` 4
 
 -- | Checks for any illegal bytes.
 --
@@ -91,6 +113,3 @@ data HeaderNameException s
     deriving (Eq, Show)
 
 instance (Show s, Typeable s) => Exception (HeaderNameException s)
-
-arrayFromHeaderName :: HeaderName -> ByteArray
-arrayFromHeaderName = undefined

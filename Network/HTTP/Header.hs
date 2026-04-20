@@ -21,6 +21,7 @@ module Network.HTTP.Header (
     parseHeaderName,
     parseNewHeaderName,
     encodeHeaderName,
+    encodeHeaderNameLower,
 
     -- *** Unsafe versions
 
@@ -43,7 +44,7 @@ import Control.Monad.ST (runST, stToIO)
 import Data.Array.Byte (ByteArray (..))
 import qualified Data.ByteString as B (ByteString, length)
 import Data.ByteString.Internal (c2w, unsafeCreate, w2c)
-import Data.Char (ord)
+import Data.Char (ord, toUpper)
 import Data.List (find)
 import Foreign (Bits (..), Storable (..), plusPtr)
 import GHC.Exts (
@@ -65,6 +66,7 @@ import Network.HTTP.Header.Internal
 import Network.HTTP.LowLevel (
     copyByteArrayToAddr,
     finalShift,
+    foldByteArrayR,
     indexWord8Array,
     indexWord8OffRawAddr,
     isBadChar,
@@ -188,11 +190,6 @@ toHeaderNameStrict bs =
                 | otherwise = pure (W64# (w64 `uncheckedShiftL64#` 1#))
 {-# INLINE toHeaderNameStrict #-}
 
-headerNameToString :: HeaderName -> String
-headerNameToString (HeaderName _ arr bm)
-    | bitmapIsZero bm = undefined arr
-    | otherwise = undefined
-
 -- | Turns the 'HeaderName' into a case-sensitive 'B.ByteString'.
 --
 -- Depending on how the 'HeaderName' is constructed, this might only return
@@ -229,6 +226,18 @@ encodeHeaderName (HeaderName _ arr@(ByteArray ba) bm) =
                         MoreWords (w64 `unsafeShiftL` 1) next
                 OneWord w64 -> OneWord (w64 `unsafeShiftL` 1)
         newIx = ix + 1
+
+-- | Encode the 'HeaderName' to a lower-case 'ByteString'.
+--
+-- Will return the held 'ByteString' if it was already lower-case.
+encodeHeaderNameLower :: HeaderName -> B.ByteString
+encodeHeaderNameLower (HeaderName (Just bs) _ bm)
+    | bitmapIsZero bm = bs
+encodeHeaderNameLower (HeaderName _ ba@(ByteArray arr) _) =
+    unsafeCreate baLen $
+        stToIO . copyByteArrayToAddr ba
+  where
+    baLen = I# (sizeofByteArray# arr)
 
 -- hAcceptLanguage :: HeaderName
 -- hAcceptLanguage = parseHeaderName "Accept-Language"
@@ -272,3 +281,23 @@ parseHeaderNameFromString s
             charInt = ord c
             !(W8# originalChar#) = fromIntegral charInt
             convertedChar# = indexWord8OffRawAddr strictIndex (fromIntegral (W8# originalChar#))
+
+-- | Turn the 'HeaderName' into a case-sensitive 'String'.
+headerNameToString :: HeaderName -> String
+headerNameToString (HeaderName _ arr bm)
+    | bitmapIsZero bm = lowerCaseList
+    | otherwise =
+        zipWith toChar lowerCaseList $
+            concatMap word64ToBoolList (bitmapToList bm)
+  where
+    toChar c b = if b then toUpper c else c
+    word64ToBoolList =
+        loop 64 []
+      where
+        loop :: Int -> [Bool] -> Word64 -> [Bool]
+        loop 0 acc _ = acc
+        loop n acc w64 =
+            let b = w64 .&. 1 == 1
+             in loop (n - 1) (b : acc) (w64 `unsafeShiftR` 1)
+    lowerCaseList =
+        foldByteArrayR (\w8 acc -> w2c w8 : acc) [] arr

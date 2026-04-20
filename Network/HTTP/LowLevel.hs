@@ -4,6 +4,7 @@
 
 module Network.HTTP.LowLevel where
 
+import Control.Exception (assert)
 import Control.Monad.ST (stToIO)
 import Data.Array.Byte (ByteArray (..), MutableByteArray (..))
 import Data.Bits ((.&.))
@@ -117,3 +118,20 @@ isMod64 i = i .&. 0xBF == 0
 finalShift :: Int -> Int
 finalShift size = 64 - (size .&. 0xBF) -- bitmask of (0011 1111)
 {-# INLINE finalShift #-}
+
+sizeOfByteArray :: ByteArray -> Int
+sizeOfByteArray (ByteArray arr) = I# (sizeofByteArray# arr)
+{-# INLINE sizeOfByteArray #-}
+
+-- | Folding over a 'ByteArray' from right to left.
+foldByteArrayR :: (Word8 -> a -> a) -> a -> ByteArray -> a
+foldByteArrayR addToAcc final ba =
+    assert (baLen >= 0) $
+        loop final (baLen - 1)
+  where
+    baLen = sizeOfByteArray ba
+    loop !acc ix
+        | ix < 0 = acc
+        | otherwise = do
+            let byte = indexWord8Array ba ix
+            loop (addToAcc byte acc) (ix - 1)
