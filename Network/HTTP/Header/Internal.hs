@@ -1,5 +1,6 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE NumericUnderscores #-}
 
 module Network.HTTP.Header.Internal where
@@ -12,6 +13,8 @@ import Data.Char (chr)
 import Data.List (intercalate)
 import Data.Typeable (Typeable)
 import Data.Word (Word64)
+import GHC.Exts (Int (..), sizeofByteArray#)
+import Network.HTTP.LowLevel
 
 -- | HTTP Field Name (Header name)
 data HeaderName
@@ -60,6 +63,26 @@ w64s =
       where
         byte = w64 .&. 0x0000_0000_0000_000F
         nextW64 = w64 `unsafeShiftR` 4
+
+-- | Checks for any illegal bytes.
+--
+--   * 'True': Valid header name
+--   * 'False': Bad header name
+--
+-- [HTTP Field Names](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.6.2)
+-- only allow visible characters that are _not_ delimiters. (though the
+-- convention is to only use alpha-numeric characters and the minus character)
+isValidHeaderName :: HeaderName -> Bool
+isValidHeaderName (HeaderName _ arr@(ByteArray ba) _) =
+    case baLen of
+        0 -> False
+        _ -> loop 0
+  where
+    baLen = I# (sizeofByteArray# ba)
+    loop ix
+        | ix == baLen = True
+        | isBadChar (indexWord8Array arr ix) = False
+        | otherwise = loop (ix + 1)
 
 -- | Any failure states of parsing a 'HeaderName'.
 data HeaderNameException s

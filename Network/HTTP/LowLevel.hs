@@ -26,7 +26,6 @@ import GHC.Exts (
  )
 import GHC.ST (ST (..))
 import GHC.Word (Word8 (..))
-import Network.HTTP.Header.Internal
 
 data RawAddr = RawAddr Addr#
 
@@ -110,26 +109,6 @@ toHeaderNameHelper index addr charIx =
     originalChar = indexWord8OffAddr# addr charIx
     convertedChar = indexWord8OffRawAddr index (fromIntegral (W8# originalChar))
 {-# INLINE toHeaderNameHelper #-}
-
--- | Checks for any illegal bytes.
---
---   * 'True': Valid header name
---   * 'False': Bad header name
---
--- [HTTP Field Names](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.6.2)
--- only allow visible characters that are _not_ delimiters. (though the
--- convention is to only use alpha-numeric characters and the minus character)
-isValidHeaderName :: HeaderName -> Bool
-isValidHeaderName (HeaderName _ arr@(ByteArray ba) _) =
-    case baLen of
-        0 -> False
-        _ -> loop 0
-  where
-    baLen = I# (sizeofByteArray# ba)
-    loop ix
-        | ix == baLen = True
-        | isBadChar (indexWord8Array arr ix) = False
-        | otherwise = loop (ix + 1)
 
 isMod64 :: Int -> Bool
 isMod64 i = i .&. 0xBF == 0
