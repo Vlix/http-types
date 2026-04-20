@@ -17,22 +17,27 @@ module Network.HTTP.Header (
     --
     -- @(e.g. the \"Content-Type\" part of "Content-Type: application\/json")@
     HeaderName (..),
+
+    -- ** Parsing
+
+    -- | Creating 'HeaderName's
     HeaderNameException (..),
     parseHeaderName,
     parseNewHeaderName,
-    encodeHeaderName,
-    encodeHeaderNameLower,
+    parseHeaderNameFromString,
 
     -- *** Unsafe versions
 
     -- | These functions will throw an exception if they encounter an illegal
-    -- byte in the to be parsed header name.
+    -- byte in the to-be-parsed header name.
     unsafeParseHeaderName,
     unsafeParseNewHeaderName,
 
-    -- ** String functions
-    parseHeaderNameFromString,
+    -- *** String
+    encodeHeaderName,
+    encodeHeaderNameLower,
     headerNameToString,
+    headerNameToStringLower,
 
     -- ** Common Header Names
 ) where
@@ -285,11 +290,12 @@ parseHeaderNameFromString s
 -- | Turn the 'HeaderName' into a case-sensitive 'String'.
 headerNameToString :: HeaderName -> String
 headerNameToString (HeaderName _ arr bm)
-    | bitmapIsZero bm = lowerCaseList
+    | bitmapIsZero bm = lowerCastList
     | otherwise =
-        zipWith toChar lowerCaseList $
+        zipWith toChar lowerCastList $
             concatMap word64ToBoolList (bitmapToList bm)
   where
+    lowerCastList = arrayToStringLower arr
     toChar c b = if b then toUpper c else c
     word64ToBoolList =
         loop 64 []
@@ -299,5 +305,14 @@ headerNameToString (HeaderName _ arr bm)
         loop n acc w64 =
             let b = w64 .&. 1 == 1
              in loop (n - 1) (b : acc) (w64 `unsafeShiftR` 1)
-    lowerCaseList =
-        foldByteArrayR (\w8 acc -> w2c w8 : acc) [] arr
+
+-- | Turn the 'HeaderName' into a lower-case 'String'
+--
+-- > let hn = unsafeParseHeaderName "Content-Type"
+-- > headerNameToStringLower hn == "content-type"
+headerNameToStringLower :: HeaderName -> String
+headerNameToStringLower (HeaderName _ arr _) = arrayToStringLower arr
+
+arrayToStringLower :: ByteArray -> [Char]
+arrayToStringLower = foldByteArrayR ((:) . w2c) []
+{-# INLINE arrayToStringLower #-}
