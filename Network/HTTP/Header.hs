@@ -9,18 +9,22 @@
 -- This module provides a more opaque API, so the internals don't "leak" like
 -- they do in the older "Network.HTTP.Types.Header" module.
 -- That module forced you to use the "Data.CaseInsensitive" API to create
--- header names, and to use list functions to go through the 'Network.HTTP.Types.Header.Headers'.
+-- header names, and to use list functions to go through the
+-- 'Network.HTTP.Types.Header.Headers'.
 module Network.HTTP.Header (
-    -- * Header Names
+    -- * Header Names (HTTP Field Names)
 
-    -- | The part of an HTTP field before the colon:
+    -- | The part of an HTTP Field before the colon:
     --
     -- @(e.g. the \"Content-Type\" part of "Content-Type: application\/json")@
-    HeaderName (..),
+    HeaderName,
 
-    -- ** Parsing
+    -- ** Parsing \/ Decoding
 
-    -- | Creating 'HeaderName's
+    -- | Creating 'HeaderName's.
+    --
+    -- Parsing also checks whether the incoming elements are allowed in
+    -- HTTP Field Names
     HeaderNameException (..),
     parseHeaderName,
     parseNewHeaderName,
@@ -33,7 +37,7 @@ module Network.HTTP.Header (
     unsafeParseHeaderName,
     unsafeParseNewHeaderName,
 
-    -- *** String
+    -- ** Encoding
     encodeHeaderName,
     encodeHeaderNameLower,
     headerNameToString,

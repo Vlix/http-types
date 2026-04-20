@@ -23,12 +23,12 @@ import Network.HTTP.LowLevel
 -- valid bytes for an HTTP Field Name.
 --
 -- The 'HeaderName' also contains a bitmapping of which
--- bytes were originally upper-case, but is only used in
--- HTTP/1 when showing/encoding the header name.
+-- bytes were originally upper-case, but is commonly only used
+-- in HTTP\/1 when showing\/encoding the header name.
 --
 -- For efficiency, the 'HeaderName' can also hold on to
--- the original 'ByteString' from which it was parsed.
--- (/if it was parsed from a 'ByteString', of course/)
+-- the original 'B.ByteString' from which it was parsed.
+-- (/if it was parsed from a 'B.ByteString', of course/)
 data HeaderName
     = HeaderName (Maybe B.ByteString) !ByteArray !Bitmap
     deriving (Eq, Show)
@@ -108,8 +108,10 @@ isValidHeaderName (HeaderName _ arr@(ByteArray ba) _) =
 
 -- | Any failure states of parsing a 'HeaderName'.
 data HeaderNameException s
-    = InvalidFieldNameByte s Char
-    | EmptyHeader
+    = -- | The 'Char' is the first encountered invalid character\/byte
+      InvalidFieldNameByte s Char
+    | -- | The input was empty
+      EmptyHeader
     deriving (Eq, Show)
 
 instance (Show s, Typeable s) => Exception (HeaderNameException s)
