@@ -51,8 +51,8 @@ module Network.HTTP.Header (
 import Control.Exception (throw, try)
 import Control.Monad.ST (runST, stToIO)
 import Data.Array.Byte (ByteArray (..))
-import qualified Data.ByteString as B (ByteString, length)
-import Data.ByteString.Internal (c2w, unsafeCreate, w2c)
+import qualified Data.ByteString as B (length)
+import Data.ByteString.Internal (ByteString, c2w, unsafeCreate, w2c)
 import Data.Char (ord, toUpper)
 import Data.List (find)
 import Foreign (Bits (..), Storable (..), plusPtr)
@@ -90,28 +90,28 @@ import Network.HTTP.LowLevel (
 
 {-# ANN module "HLint: ignore Use uncurry" #-}
 
--- | Creates a 'HeaderName' from the given 'B.ByteString' while holding on
--- to the original 'B.ByteString', in case of later reuse.
-parseHeaderName :: B.ByteString -> Either (HeaderNameException B.ByteString) HeaderName
+-- | Creates a 'HeaderName' from the given 'ByteString' while holding on
+-- to the original 'ByteString', in case of later reuse.
+parseHeaderName :: ByteString -> Either (HeaderNameException ByteString) HeaderName
 parseHeaderName hdr =
     parseHeaderName' hdr $
         \(ba, bitmap) ->
             HeaderName (Just hdr) ba bitmap
 
--- | Creates a 'HeaderName' from the given 'B.ByteString' /without/ holding on
--- to the original 'B.ByteString'.
+-- | Creates a 'HeaderName' from the given 'ByteString' /without/ holding on
+-- to the original 'ByteString'.
 --
 -- Could lead to quicker garbage collection.
-parseNewHeaderName :: B.ByteString -> Either (HeaderNameException B.ByteString) HeaderName
+parseNewHeaderName :: ByteString -> Either (HeaderNameException ByteString) HeaderName
 parseNewHeaderName hdr =
     parseHeaderName' hdr $
         \(ba, bitmap) ->
             HeaderName Nothing ba bitmap
 
 parseHeaderName' ::
-    B.ByteString ->
+    ByteString ->
     ((ByteArray, Bitmap) -> HeaderName) ->
-    Either (HeaderNameException B.ByteString) HeaderName
+    Either (HeaderNameException ByteString) HeaderName
 parseHeaderName' hdr mkHeader
     | size <= 0 = Left EmptyHeader
     | otherwise =
@@ -121,32 +121,32 @@ parseHeaderName' hdr mkHeader
     size = B.length hdr
 {-# INLINE parseHeaderName' #-}
 
--- | __Will throw an 'InvalidFieldNameByte' exception if the 'B.ByteString'__
+-- | __Will throw an 'InvalidFieldNameByte' exception if the 'ByteString'__
 -- __contains any bytes not defined in__
 -- [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.6.2)
 --
--- Creates a 'HeaderName' from the given 'B.ByteString' while holding on
--- to the original 'B.ByteString', in case of later reuse.
-unsafeParseHeaderName :: B.ByteString -> HeaderName
+-- Creates a 'HeaderName' from the given 'ByteString' while holding on
+-- to the original 'ByteString', in case of later reuse.
+unsafeParseHeaderName :: ByteString -> HeaderName
 unsafeParseHeaderName hdr =
     unsafeParseHeaderName' hdr $ \(ba, bitmap) ->
         HeaderName (Just hdr) ba bitmap
 
--- | __Will throw an 'InvalidFieldNameByte' exception if the 'B.ByteString'__
+-- | __Will throw an 'InvalidFieldNameByte' exception if the 'ByteString'__
 -- __contains any bytes not defined in__
 -- [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.6.2)
 --
--- Creates a 'HeaderName' from the given 'B.ByteString' /without/ holding on
--- to the original 'B.ByteString'.
+-- Creates a 'HeaderName' from the given 'ByteString' /without/ holding on
+-- to the original 'ByteString'.
 --
 -- Could lead to quicker garbage collection.
-unsafeParseNewHeaderName :: B.ByteString -> HeaderName
+unsafeParseNewHeaderName :: ByteString -> HeaderName
 unsafeParseNewHeaderName hdr =
     unsafeParseHeaderName' hdr $ \(ba, bitmap) ->
         HeaderName Nothing ba bitmap
 
 unsafeParseHeaderName' ::
-    B.ByteString ->
+    ByteString ->
     ((ByteArray, Bitmap) -> HeaderName) ->
     HeaderName
 unsafeParseHeaderName' hdr mkHeader
@@ -158,7 +158,7 @@ unsafeParseHeaderName' hdr mkHeader
     size = B.length hdr
 {-# INLINE unsafeParseHeaderName' #-}
 
-toHeaderNameStrict :: B.ByteString -> IO (ByteArray, Bitmap)
+toHeaderNameStrict :: ByteString -> IO (ByteArray, Bitmap)
 toHeaderNameStrict bs =
     withNewByteArray bs $ \ptr mba -> do
         mkBitmapRef <- newSTRef (id :: Bitmap -> Bitmap)
@@ -199,12 +199,12 @@ toHeaderNameStrict bs =
                 | otherwise = pure (W64# (w64 `uncheckedShiftL64#` 1#))
 {-# INLINE toHeaderNameStrict #-}
 
--- | Turns the 'HeaderName' into a case-sensitive 'B.ByteString'.
+-- | Turns the 'HeaderName' into a case-sensitive 'ByteString'.
 --
 -- Depending on how the 'HeaderName' is constructed, this might only return
--- the original 'B.ByteString' that was used to create it, or it creates a
--- 'B.ByteString' from the internal 'ByteArray' + casing bitmap.
-encodeHeaderName :: HeaderName -> B.ByteString
+-- the original 'ByteString' that was used to create it, or it creates a
+-- 'ByteString' from the internal 'ByteArray' + casing bitmap.
+encodeHeaderName :: HeaderName -> ByteString
 encodeHeaderName (HeaderName (Just bs) _ _) = bs
 encodeHeaderName (HeaderName _ arr@(ByteArray ba) bm) =
     unsafeCreate baLen $
@@ -239,7 +239,7 @@ encodeHeaderName (HeaderName _ arr@(ByteArray ba) bm) =
 -- | Encode the 'HeaderName' to a lower-case 'ByteString'.
 --
 -- Will return the held 'ByteString' if it was already lower-case.
-encodeHeaderNameLower :: HeaderName -> B.ByteString
+encodeHeaderNameLower :: HeaderName -> ByteString
 encodeHeaderNameLower (HeaderName (Just bs) _ bm)
     | bitmapIsZero bm = bs
 encodeHeaderNameLower (HeaderName _ ba@(ByteArray arr) _) =
