@@ -16,9 +16,38 @@ on:
     branches: [master]
 
 jobs:
+  # Just to test very old compiler for low base version dependency
+  oldest:
+    name: oldest / ghc-7.10.3 / ubuntu
+    runs-on: ubuntu-latest
+    steps:
+
+    - uses: actions/checkout@v4
+
+    - uses: haskell-actions/setup@v2
+      id: setup-haskell-cabal
+      name: Setup Haskell
+      with:
+        ghc-version: "7.10.3"
+        cabal-version: 3.0.0.0
+
+    - uses: actions/cache@v3
+      name: Cache cabal-store
+      with:
+        path: ${{ steps.setup-haskell-cabal.outputs.cabal-store }}
+        key: ubuntu-7.10.3-cabal
+
+    - name: Build
+      run: |
+        cabal build --ghc-option='-Wall' \
+          --constraint="bytestring==0.10.6.0" \
+          --constraint="array==0.5.1.0" \
+          --constraint="case-insensitive==1.2.0.2" \
+          --constraint="text==1.2.0.2"
+
   cabal:
     name: cabal / ghc-${{matrix.ghc}} / ${{ matrix.os }}
-    continue-on-error: ${{ matrix.ghc == '9.8.1'}}
+    continue-on-error: ${{ matrix.ghc == '9.14.1'}}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -27,12 +56,11 @@ jobs:
           - macOS-latest
         cabal: ["latest"]
         ghc:
-          - "8.10.7"
-          - "9.0.2"
-          - "9.2.8"
-          - "9.4.8"
-          - "9.6.3"
-          - "9.8.1"
+          - "9.6.7"
+          - "9.8.4"
+          - "9.10.3"
+          - "9.12.4"
+          - "9.14.1"
 
     steps:
     - uses: actions/checkout@v4
@@ -81,11 +109,10 @@ jobs:
       matrix:
         stack: ["latest"]
         resolver:
-          - "--resolver lts-18"  # GHC 8.10.7
-          - "--resolver lts-19 --stack-yaml=stack-lts-19.yaml"  # GHC 9.0.2
-          - "--resolver lts-20"  # GHC 9.2.8
-          - "--resolver lts-21"  # GHC 9.4.8
-          - "--resolver nightly" # GHC 9.6.3
+          - "--resolver lts-22"  # GHC 9.6.7
+          - "--resolver lts-23"  # GHC 9.8.4
+          - "--resolver lts-24"  # GHC 9.10.3
+          - "--resolver nightly" # GHC 9.12.4
 
     steps:
     - uses: actions/checkout@v4
@@ -104,13 +131,13 @@ jobs:
 
     - name: Build
       run: |
-        stack build ${{ matrix.resolver }} --test --bench --no-run-tests --no-run-benchmarks --no-rerun-tests --ghc-options='-Wall'
+        stack build ${{ matrix.resolver }} --test --bench --no-run-tests --no-run-benchmarks --ghc-options='-Wall'
     - name: Test
       run: |
-        stack test http-types:test:spec ${{ matrix.resolver }}
+        stack test --no-rerun-tests http-types:test:spec ${{ matrix.resolver }}
     - name: Test Docs
       run: |
-        stack test http-types:test:doctests ${{ matrix.resolver }}
+        stack test --no-rerun-tests http-types:test:doctests ${{ matrix.resolver }}
     # # We probably want to add benchmarks at some point, just to make sure
     # # functions don't regress in performance too much?
     # - name: Bench

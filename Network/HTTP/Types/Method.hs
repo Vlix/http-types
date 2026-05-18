@@ -37,7 +37,6 @@ import Data.Array (Array, Ix, assocs, listArray, (!))
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as B8
 import Data.Data (Data)
-import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 
 -- $setup
@@ -114,7 +113,6 @@ data StdMethod
         , Enum
         , Bounded
         , Ix
-        , Typeable
         , -- | @since 0.12.4
           Generic
         , -- | @since 0.12.4

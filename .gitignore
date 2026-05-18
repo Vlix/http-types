@@ -8,3 +8,4 @@ dist-newstyle/*
 .stack-work/*
 test/golden/*.actual
 test/.golden/**/actual
+*.code-workspace
