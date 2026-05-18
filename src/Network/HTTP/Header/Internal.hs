@@ -14,7 +14,7 @@ import Data.List (intercalate)
 import Data.Typeable (Typeable)
 import Data.Word (Word64)
 import GHC.Exts (Int (..), sizeofByteArray#)
-import Network.HTTP.LowLevel
+import Network.HTTP.LowLevel (indexWord8Array, isBadChar)
 
 -- | HTTP Field Name (Header name)
 --
@@ -36,10 +36,12 @@ data HeaderName
 -- | Access the inner 'ByteArray' of the 'HeaderName'
 unsafeGetByteArray :: HeaderName -> ByteArray
 unsafeGetByteArray (HeaderName _ ba _) = ba
+{-# INLINE unsafeGetByteArray #-}
 
 -- | Access the inner 'ByteString' of the 'HeaderName'
 unsafeGetByteString :: HeaderName -> Maybe B.ByteString
 unsafeGetByteString (HeaderName mbs _ _) = mbs
+{-# INLINE unsafeGetByteString #-}
 
 -- | Bits from "left-to-right" that show which bytes were
 -- originally upper-case.
