@@ -11,7 +11,6 @@ module Network.HTTP.Types.Version (
 ) where
 
 import Data.Data (Data)
-import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 
 -- | HTTP Version.
@@ -24,7 +23,6 @@ data HttpVersion = HttpVersion
     deriving
         ( Eq
         , Ord
-        , Typeable
         , -- | @since 0.12.4
           Data
         , -- | @since 0.12.4

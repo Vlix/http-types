@@ -126,7 +126,6 @@ module Network.HTTP.Types.Status (
 
 import Data.ByteString as B (ByteString, empty)
 import Data.Data (Data)
-import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 
 -- | HTTP Status.
@@ -149,7 +148,6 @@ data Status = Status
     }
     deriving
         ( Show
-        , Typeable
         , -- | @since 0.12.4
           Data
         , -- | @since 0.12.4

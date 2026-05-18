@@ -99,7 +99,6 @@ import Data.List (intersperse)
 #if __GLASGOW_HASKELL__ < 710
 import Data.Monoid
 #endif
-import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 
 -- | A full HTTP header field with the name and value separated.
@@ -468,8 +467,6 @@ data ByteRange
           Eq
         , -- | @since 0.8.4
           Ord
-        , -- | @since 0.8.4
-          Typeable
         , -- | @since 0.8.4
           Data
         , -- | @since 0.12.4
