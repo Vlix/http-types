@@ -88,15 +88,11 @@ import Network.HTTP.LowLevel (
     writeWord8Array,
  )
 
-{-# ANN module "HLint: ignore Use uncurry" #-}
-
 -- | Creates a 'HeaderName' from the given 'ByteString' while holding on
 -- to the original 'ByteString', in case of later reuse.
 parseHeaderName :: ByteString -> Either (HeaderNameException ByteString) HeaderName
 parseHeaderName hdr =
-    parseHeaderName' hdr $
-        \(ba, bitmap) ->
-            HeaderName (Just hdr) ba bitmap
+    parseHeaderName' hdr $ HeaderName (Just hdr)
 
 -- | Creates a 'HeaderName' from the given 'ByteString' /without/ holding on
 -- to the original 'ByteString'.
@@ -104,19 +100,17 @@ parseHeaderName hdr =
 -- Could lead to quicker garbage collection.
 parseNewHeaderName :: ByteString -> Either (HeaderNameException ByteString) HeaderName
 parseNewHeaderName hdr =
-    parseHeaderName' hdr $
-        \(ba, bitmap) ->
-            HeaderName Nothing ba bitmap
+    parseHeaderName' hdr $ HeaderName Nothing
 
 parseHeaderName' ::
     ByteString ->
-    ((ByteArray, Bitmap) -> HeaderName) ->
+    (ByteArray -> Bitmap -> HeaderName) ->
     Either (HeaderNameException ByteString) HeaderName
 parseHeaderName' hdr mkHeader
     | size <= 0 = Left EmptyHeader
     | otherwise =
         unsafeDupablePerformIO $
-            try (mkHeader <$> toHeaderNameStrict hdr)
+            try (uncurry mkHeader <$> toHeaderNameStrict hdr)
   where
     size = B.length hdr
 {-# INLINE parseHeaderName' #-}
@@ -129,8 +123,7 @@ parseHeaderName' hdr mkHeader
 -- to the original 'ByteString', in case of later reuse.
 unsafeParseHeaderName :: ByteString -> HeaderName
 unsafeParseHeaderName hdr =
-    unsafeParseHeaderName' hdr $ \(ba, bitmap) ->
-        HeaderName (Just hdr) ba bitmap
+    unsafeParseHeaderName' hdr $ HeaderName (Just hdr)
 
 -- | __Will throw an 'InvalidFieldNameByte' exception if the 'ByteString'__
 -- __contains any bytes not defined in__
@@ -142,18 +135,17 @@ unsafeParseHeaderName hdr =
 -- Could lead to quicker garbage collection.
 unsafeParseNewHeaderName :: ByteString -> HeaderName
 unsafeParseNewHeaderName hdr =
-    unsafeParseHeaderName' hdr $ \(ba, bitmap) ->
-        HeaderName Nothing ba bitmap
+    unsafeParseHeaderName' hdr $ HeaderName Nothing
 
 unsafeParseHeaderName' ::
     ByteString ->
-    ((ByteArray, Bitmap) -> HeaderName) ->
+    (ByteArray -> Bitmap -> HeaderName) ->
     HeaderName
 unsafeParseHeaderName' hdr mkHeader
     | size <= 0 = throw (EmptyHeader :: HeaderNameException String)
     | otherwise =
         unsafeDupablePerformIO $
-            mkHeader <$> toHeaderNameStrict hdr
+            uncurry mkHeader <$> toHeaderNameStrict hdr
   where
     size = B.length hdr
 {-# INLINE unsafeParseHeaderName' #-}
