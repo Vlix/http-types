@@ -16,17 +16,21 @@ import GHC.Exts (
     Int#,
     Ptr (..),
     RealWorld,
+    Word64#,
     Word8#,
     copyByteArrayToAddr#,
+    eqWord8#,
     indexWord8Array#,
     indexWord8OffAddr#,
+    isTrue#,
     newByteArray#,
+    or64#,
     sizeofByteArray#,
     unsafeFreezeByteArray#,
     writeWord8Array#,
  )
 import GHC.ST (ST (..))
-import GHC.Word (Word8 (..))
+import GHC.Word (Word64 (..), Word8 (..))
 
 -- | Carrier for a raw 'Addr#'
 data RawAddr = RawAddr Addr#
@@ -155,3 +159,14 @@ foldByteArrayR addToAcc final ba =
         | otherwise = do
             let byte = indexWord8Array ba ix
             loop (addToAcc byte acc) (ix - 1)
+
+-- | Comparing 2 bytes for equality and settings the least
+-- significant bit of a 64-bitmap to '1'.
+adjustBitmap :: Word8# -> Word8# -> Word64# -> Word64#
+adjustBitmap w1 w2 bitmap =
+    if isTrue# (w1 `eqWord8#` w2)
+        then bitmap
+        else bitmap `or64#` one#
+  where
+    !(W64# one#) = 1
+{-# INLINE adjustBitmap #-}
