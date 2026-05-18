@@ -96,14 +96,16 @@ Test-Suite doctests
 
 Benchmark http-bench
   main-is:            Bench.hs
-  hs-source-dirs:     bench
+  hs-source-dirs:     src, bench
   type:               exitcode-stdio-1.0
-  -- other-modules:
+  other-modules:      Network.HTTP.Header
+                      Network.HTTP.Header.Internal
+                      Network.HTTP.LowLevel
   GHC-Options:        -Wall -threaded -O2
   default-language:   Haskell2010
   build-depends:      base,
                       bytestring,
                       case-insensitive,
                       deepseq,
-                      http-types,
+                      text,
                       tasty-bench
