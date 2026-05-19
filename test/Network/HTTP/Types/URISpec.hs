@@ -155,15 +155,8 @@ mkGoldenFile name content =
         encodePretty = B8.unpack,
         writeToFile = B.writeFile,
         readFromFile = B.readFile,
-#if MIN_VERSION_hspec_golden(0,2,0)
-        -- Has this format because 'hspec-golden-0.1.0.3' has it as default
-        -- and we want to keep it the same until we drop LTS-18
         goldenFile = goldenDir </> name </> "golden",
         actualFile = Just (goldenDir </> name </> "actual"),
-#else
-        testName = name,
-        directory = goldenDir,
-#endif
         failFirstTime = False
     }
 
