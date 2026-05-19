@@ -5,7 +5,7 @@ dist/
 dist-newstyle/
 *_flymake.hs
 *.lock
-.stack-work/*
+.stack-work/
 test/.golden/**/actual
 *.code-workspace
 *.local
