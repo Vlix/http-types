@@ -551,8 +551,13 @@ parseByteRanges bs1 = do
             (r, bs5) <- range bs4
             ranges (front . (r :)) bs5
 
-    -- FIXME: Use 'stripPrefix' from the 'bytestring' package.
-    -- Might have to update the dependency constraints though.
-    stripPrefixB x y
-        | x `B.isPrefixOf` y = Just (B.drop (B.length x) y)
-        | otherwise = Nothing
+stripPrefixB :: B.ByteString -> B.ByteString -> Maybe B.ByteString
+#if !MIN_VERSION_bytestring(0,10,8)
+-- FIXME: Use 'stripPrefix' from the 'bytestring' package.
+-- Might have to update the dependency constraints though.
+stripPrefixB x y
+    | x `B.isPrefixOf` y = Just (B.drop (B.length x) y)
+    | otherwise = Nothing
+#else
+stripPrefixB = B.stripPrefix
+#endif
