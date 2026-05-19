@@ -8,6 +8,7 @@ module Network.HTTP.Types.Version (
     http10,
     http11,
     http20,
+    http30,
 ) where
 
 import Data.Data (Data)
@@ -51,3 +52,9 @@ http11 = HttpVersion 1 1
 -- @since 0.10
 http20 :: HttpVersion
 http20 = HttpVersion 2 0
+
+-- | HTTP 3.0
+--
+-- @since 0.12.5
+http30 :: HttpVersion
+http30 = HttpVersion 3 0
