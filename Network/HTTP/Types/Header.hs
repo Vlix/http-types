@@ -96,9 +96,6 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.CaseInsensitive as CI
 import Data.Data (Data)
 import Data.List (intersperse)
-#if __GLASGOW_HASKELL__ < 710
-import Data.Monoid
-#endif
 import GHC.Generics (Generic)
 
 -- | A full HTTP header field with the name and value separated.

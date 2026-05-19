@@ -91,9 +91,6 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Char (ord)
 import Data.List (intersperse)
 import Data.Maybe (fromMaybe)
-#if __GLASGOW_HASKELL__ < 710
-import Data.Monoid
-#endif
 import Data.Text (Text)
 import Data.Text.Encoding (decodeUtf8With, encodeUtf8)
 import Data.Text.Encoding.Error (lenientDecode)
