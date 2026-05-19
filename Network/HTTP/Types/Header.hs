@@ -448,7 +448,9 @@ hPrefer = "Prefer"
 hPreferenceApplied :: HeaderName
 hPreferenceApplied = "Preference-Applied"
 
--- | An individual byte range.
+-- | An individual byte range. Used in @Range@ request headers.
+-- This type and its accompanying functions are /NOT/ compatible with the
+-- @Content-Range@ response header.
 --
 -- Negative indices are not allowed!
 --

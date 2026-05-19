@@ -239,6 +239,8 @@ instance Bounded Status where
     maxBound = status511
 
 -- | Create a 'Status' from a status code and message.
+--
+-- @since 0.7.3
 mkStatus :: Int -> B.ByteString -> Status
 mkStatus = Status
 
