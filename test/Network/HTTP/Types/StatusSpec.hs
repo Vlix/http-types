@@ -102,6 +102,7 @@ _400Statusses =
     , (status428, preconditionRequired428, 428, "Precondition Required")
     , (status429, tooManyRequests429, 429, "Too Many Requests")
     , (status431, requestHeaderFieldsTooLarge431, 431, "Request Header Fields Too Large")
+    , (status451, unavailableForLegalReasons451, 451, "Unavailable For Legal Reasons")
     ]
 
 _500Statusses :: [StatusTuple]

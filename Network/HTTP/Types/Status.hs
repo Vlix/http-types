@@ -101,6 +101,8 @@ module Network.HTTP.Types.Status (
     tooManyRequests429,
     status431,
     requestHeaderFieldsTooLarge431,
+    status451,
+    unavailableForLegalReasons451,
     status500,
     internalServerError500,
     status501,
@@ -221,6 +223,7 @@ instance Enum Status where
     toEnum 428 = status428
     toEnum 429 = status429
     toEnum 431 = status431
+    toEnum 451 = status451
     toEnum 500 = status500
     toEnum 501 = status501
     toEnum 502 = status502
@@ -645,60 +648,74 @@ unprocessableEntity422 :: Status
 unprocessableEntity422 = status422
 
 -- | Upgrade Required 426
--- (<https://tools.ietf.org/html/rfc7231#section-6.5.15>)
+-- (<https://tools.ietf.org/html/rfc7231#section-6.5.15 RFC 7231>)
 --
 -- @since 0.10
 status426 :: Status
 status426 = mkStatus 426 "Upgrade Required"
 
 -- | Upgrade Required 426
--- (<https://tools.ietf.org/html/rfc7231#section-6.5.15>)
+-- (<https://tools.ietf.org/html/rfc7231#section-6.5.15 RFC 7231>)
 --
 -- @since 0.10
 upgradeRequired426 :: Status
 upgradeRequired426 = status426
 
 -- | Precondition Required 428
--- (<https://tools.ietf.org/html/rfc6585 RFC 6585>)
+-- (<https://tools.ietf.org/html/rfc6585#section-3 RFC 6585>)
 --
 -- @since 0.8.5
 status428 :: Status
 status428 = mkStatus 428 "Precondition Required"
 
 -- | Precondition Required 428
--- (<https://tools.ietf.org/html/rfc6585 RFC 6585>)
+-- (<https://tools.ietf.org/html/rfc6585#section-3 RFC 6585>)
 --
 -- @since 0.8.5
 preconditionRequired428 :: Status
 preconditionRequired428 = status428
 
 -- | Too Many Requests 429
--- (<https://tools.ietf.org/html/rfc6585 RFC 6585>)
+-- (<https://tools.ietf.org/html/rfc6585#section-4 RFC 6585>)
 --
 -- @since 0.8.5
 status429 :: Status
 status429 = mkStatus 429 "Too Many Requests"
 
 -- | Too Many Requests 429
--- (<https://tools.ietf.org/html/rfc6585 RFC 6585>)
+-- (<https://tools.ietf.org/html/rfc6585#section-4 RFC 6585>)
 --
 -- @since 0.8.5
 tooManyRequests429 :: Status
 tooManyRequests429 = status429
 
 -- | Request Header Fields Too Large 431
--- (<https://tools.ietf.org/html/rfc6585 RFC 6585>)
+-- (<https://tools.ietf.org/html/rfc6585#section-5 RFC 6585>)
 --
 -- @since 0.8.5
 status431 :: Status
 status431 = mkStatus 431 "Request Header Fields Too Large"
 
 -- | Request Header Fields Too Large 431
--- (<https://tools.ietf.org/html/rfc6585 RFC 6585>)
+-- (<https://tools.ietf.org/html/rfc6585#section-5 RFC 6585>)
 --
 -- @since 0.8.5
 requestHeaderFieldsTooLarge431 :: Status
 requestHeaderFieldsTooLarge431 = status431
+
+-- | Unavailable For Legal Reasons 451
+-- (<https://tools.ietf.org/html/rfc7725 RFC 7725>)
+--
+-- @since 0.12.5
+status451 :: Status
+status451 = mkStatus 451 "Unavailable For Legal Reasons"
+
+-- | Unavailable For Legal Reasons 451
+-- (<https://tools.ietf.org/html/rfc7725 RFC 7725>)
+--
+-- @since 0.13
+unavailableForLegalReasons451 :: Status
+unavailableForLegalReasons451 = status451
 
 -- | Internal Server Error 500
 status500 :: Status
@@ -769,14 +786,14 @@ httpVersionNotSupported505 :: Status
 httpVersionNotSupported505 = status505
 
 -- | Network Authentication Required 511
--- (<https://tools.ietf.org/html/rfc6585 RFC 6585>)
+-- (<https://tools.ietf.org/html/rfc6585#section-6 RFC 6585>)
 --
 -- @since 0.8.5
 status511 :: Status
 status511 = mkStatus 511 "Network Authentication Required"
 
 -- | Network Authentication Required 511
--- (<https://tools.ietf.org/html/rfc6585 RFC 6585>)
+-- (<https://tools.ietf.org/html/rfc6585#section-6 RFC 6585>)
 --
 -- @since 0.8.5
 networkAuthenticationRequired511 :: Status
