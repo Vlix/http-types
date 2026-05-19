@@ -2,6 +2,8 @@
 
 ## 0.12.5 [XXXX-XX-XX]
 
+* Add status `451 Unavailable For Legal Reasons`
+* Add `http30` as a shortcut for `HttpVersion 3 0`
 * Export everything from `Network.HTTP.Types`
 * Added a bunch of regression, unit and property tests for stability.
 * Updated the `README.md`
