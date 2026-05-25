@@ -7,11 +7,9 @@ module Main where
 
 import Control.DeepSeq (NFData (..))
 import Data.ByteString (ByteString)
-
--- newHeaderName,
-
 import Data.ByteString.Char8 (unpack)
 import Data.CaseInsensitive (mk)
+import Data.Functor ((<&>))
 import GHC.Generics (Generic)
 import Network.HTTP.Header as H (unsafeParseNewHeaderName)
 import Network.HTTP.Header.Internal
@@ -34,85 +32,95 @@ createBench1 :: Benchmark
 createBench1 =
     bgroup
         "Create1"
-        [ both "Alt-Svc" altSvc
-        , both "Strict-Transport-Security" sts
+        [ bgroup "Classic" $
+            allMarks <&> \(name, bss) ->
+                bench name $ nf mk bss
+        , bgroup "New" $
+            allMarks <&> \(name, bss) ->
+                bcompare ("Create1.Classic." <> name) $
+                    bench name $
+                        nf unsafeParseNewHeaderName bss
         ]
   where
     altSvc, sts :: ByteString
     altSvc = "Alt-Svc"
     sts = "Strict-Transport-Security"
-    both name bss =
-        bgroup
-            name
-            [ bench "Classic" $ nf mk bss
-            , bcompare ("Create1." <> name <> ".Classic") $
-                bench "New" $
-                    nf unsafeParseNewHeaderName bss
-            ]
+    allMarks =
+        [ ("Alt-Svc", altSvc)
+        , ("Strict-Transport-Security", sts)
+        ]
 
 createBench :: Benchmark
 createBench =
     bgroup
         "Create"
-        [ both "short-small" shortSmall
-        , both "long-small" longSmall
-        , both "short-big" shortBig
-        , both "long-big" longBig
-        , both "Average" averageDDG
+        [ bgroup "Classic" $
+            allMarks <&> \(name, bss) ->
+                bench name $ nf (fmap mk) bss
+        , bgroup "New" $
+            allMarks <&> \(name, bss) ->
+                bcompare ("Create.Classic." <> name) $
+                    bench name $
+                        nf (fmap unsafeParseNewHeaderName) bss
         ]
   where
-    both name bss =
-        bgroup
-            name
-            [ bench "Classic" $ nf (fmap mk) bss
-            , bcompare ("Create." <> name <> ".Classic") $
-                bench "New" $
-                    nf (fmap unsafeParseNewHeaderName) bss
-            ]
+    allMarks =
+        [ ("short-small", shortSmall)
+        , ("long-small", longSmall)
+        , ("short-big", shortBig)
+        , ("long-big", longBig)
+        , ("Average", averageDDG)
+        ]
 
 eqBench :: Benchmark
 eqBench =
     bgroup
         "Eq"
-        [ bothEqual "short-small" shortSmall
-        , bothEqual "long-small" longSmall
-        , bothEqual "short-big" shortBig
-        , bothEqual "long-big" longBig
-        , bothEqual "average" averageDDG
+        [ bgroup "Classic" $
+            allMarks <&> \(name, bss) ->
+                env (pure (mk <$> bss)) $
+                    bench name . nf (\x -> x == x)
+        , bgroup "New" $
+            allMarks <&> \(name, bss) ->
+                env (pure (unsafeParseNewHeaderName <$> bss, unsafeParseNewHeaderName <$> bss)) $
+                    bcompare ("Eq.Classic." <> name)
+                        . bench name
+                        . nf (uncurry (==))
         ]
   where
-    bothEqual name bss =
-        bgroup
-            name
-            [ env (pure (mk <$> bss)) $
-                bench "Classic" . nf (\x -> x == x)
-            , env (pure (unsafeParseNewHeaderName <$> bss, unsafeParseNewHeaderName <$> bss)) $
-                bcompare ("Eq." <> name <> ".Classic")
-                    . bench "New"
-                    . nf (uncurry (==))
-            ]
+    allMarks =
+        [ ("short-small", shortSmall)
+        , ("long-small", longSmall)
+        , ("short-big", shortBig)
+        , ("long-big", longBig)
+        , ("average", averageDDG)
+        ]
 
 lookupBench :: Benchmark
 lookupBench =
     bgroup
         "Lookup"
-        [ bothLookup "Age" "short-small" shortSmall
-        , bothLookup "Age" "short-big" shortBig
-        , bothLookup "Via" "short-small" shortSmall
-        , bothLookup "Via" "short-big" shortBig
+        [ bgroup "Classic" $
+            allMarks <&> \(hdr, name, bss) ->
+                mkEnv mk hdr bss $
+                    bench (unpack hdr <> "." <> name) . nf (uncurry lookup)
+        , bgroup "New" $
+            allMarks <&> \(hdr, name, bss) ->
+                let benchName = unpack hdr <> "." <> name
+                 in mkEnv unsafeParseNewHeaderName hdr bss $
+                        bcompare ("Lookup.Classic." <> benchName)
+                            . bench benchName
+                            . nf (uncurry lookup)
         ]
   where
+    mkEnv f hdr bss = env $ pure (f hdr, toKeyValueList f bss)
+    allMarks =
+        [ ("Age", "short-small", shortSmall)
+        , ("Age", "short-big", shortBig)
+        , ("Via", "short-small", shortSmall)
+        , ("Via", "short-big", shortBig)
+        ]
     toKeyValueList f = fmap $ \x -> (f x, ())
-    bothLookup hdr name bss =
-        bgroup
-            (unpack hdr <> "." <> name)
-            [ env (pure (mk hdr, toKeyValueList mk bss)) $
-                bench "Classic" . nf (uncurry lookup)
-            , env (pure (unsafeParseNewHeaderName hdr, toKeyValueList unsafeParseNewHeaderName bss)) $
-                bcompare ("Lookup." <> unpack hdr <> "." <> name <> ".Classic")
-                    . bench "New"
-                    . nf (uncurry lookup)
-            ]
 
 shortSmall, longSmall, shortBig, longBig, averageDDG :: [ByteString]
 shortSmall = ["Age", "TE", "Tk", "Via"]
@@ -210,8 +218,3 @@ deriving instance Generic Bitmap
 instance NFData Bitmap
 deriving instance (Generic s) => Generic (HeaderNameException s)
 instance (Generic s, NFData s) => NFData (HeaderNameException s)
-
--- where
---     rnf EmptyHeader = ()
---     rnf (InvalidFieldNameByte bs w8) =
---         bs `seq` w8 `seq` ()
