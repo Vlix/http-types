@@ -139,14 +139,14 @@ import GHC.Generics (Generic)
 --
 -- Note that the 'Show' instance is only for debugging.
 data Status = Status
-    { -- | The 3-digit code of a 'Status'
-      --
-      -- For example: "200" in a @200 OK@ status
-      statusCode :: Int
-    , -- | The textual message of a 'Status'
-      --
-      -- For example: "Not Found" in a @404 Not Found@ status
-      statusMessage :: B.ByteString
+    { statusCode :: Int
+    -- ^ The 3-digit code of a 'Status'
+    --
+    -- For example: "200" in a @200 OK@ status
+    , statusMessage :: B.ByteString
+    -- ^ The textual message of a 'Status'
+    --
+    -- For example: "Not Found" in a @404 Not Found@ status
     }
     deriving
         ( Show
@@ -166,11 +166,11 @@ data Status = Status
 
 -- | A 'Status' is equal to another 'Status' if the status codes are equal.
 instance Eq Status where
-    Status { statusCode = a } == Status { statusCode = b } = a == b
+    Status{statusCode = a} == Status{statusCode = b} = a == b
 
 -- | 'Status'es are ordered according to their status codes only.
 instance Ord Status where
-    compare Status { statusCode = a } Status { statusCode = b } = a `compare` b
+    compare Status{statusCode = a} Status{statusCode = b} = a `compare` b
 
 -- | Be advised, that when using the \"enumFrom*\" family of methods or
 -- ranges in lists, it will generate all possible status codes.
@@ -715,7 +715,7 @@ status451 = mkStatus 451 "Unavailable For Legal Reasons"
 -- | Unavailable For Legal Reasons 451
 -- (<https://tools.ietf.org/html/rfc7725 RFC 7725>)
 --
--- @since 0.13
+-- @since 0.12.5
 unavailableForLegalReasons451 :: Status
 unavailableForLegalReasons451 = status451
 
@@ -807,7 +807,7 @@ networkAuthenticationRequired511 = status511
 --
 -- @since 0.8.0
 statusIsInformational :: Status -> Bool
-statusIsInformational (Status {statusCode=code}) = code >= 100 && code < 200
+statusIsInformational (Status{statusCode = code}) = code >= 100 && code < 200
 
 -- | Successful class
 --
@@ -815,7 +815,7 @@ statusIsInformational (Status {statusCode=code}) = code >= 100 && code < 200
 --
 -- @since 0.8.0
 statusIsSuccessful :: Status -> Bool
-statusIsSuccessful (Status {statusCode=code}) = code >= 200 && code < 300
+statusIsSuccessful (Status{statusCode = code}) = code >= 200 && code < 300
 
 -- | Redirection class
 --
@@ -823,7 +823,7 @@ statusIsSuccessful (Status {statusCode=code}) = code >= 200 && code < 300
 --
 -- @since 0.8.0
 statusIsRedirection :: Status -> Bool
-statusIsRedirection (Status {statusCode=code}) = code >= 300 && code < 400
+statusIsRedirection (Status{statusCode = code}) = code >= 300 && code < 400
 
 -- | Client Error class
 --
@@ -831,7 +831,7 @@ statusIsRedirection (Status {statusCode=code}) = code >= 300 && code < 400
 --
 -- @since 0.8.0
 statusIsClientError :: Status -> Bool
-statusIsClientError (Status {statusCode=code}) = code >= 400 && code < 500
+statusIsClientError (Status{statusCode = code}) = code >= 400 && code < 500
 
 -- | Server Error class
 --
@@ -839,4 +839,4 @@ statusIsClientError (Status {statusCode=code}) = code >= 400 && code < 500
 --
 -- @since 0.8.0
 statusIsServerError :: Status -> Bool
-statusIsServerError (Status {statusCode=code}) = code >= 500 && code < 600
+statusIsServerError (Status{statusCode = code}) = code >= 500 && code < 600
