@@ -85,6 +85,14 @@ spec = do
         it "still encodes the same (query)" $
             mkGoldenFile "urlEncode-query" $
                 urlEncode True asciis
+        it "roundtrips (urlDecode True . urlEncode True)" $
+          property (\input -> input == (urlDecode True . urlEncode True) input)
+        it "roundtrips (urlDecode False . urlEncode False)" $
+          property (\input -> input == (urlDecode False . urlEncode False) input)
+        it "roundtrips (urlDecode False . urlEncode True)" $
+          property (\input -> input == (urlDecode False . urlEncode True) input)
+        it "roundtrips (urlDecode True . urlEncode False)" $
+          property (\input -> input == (urlDecode True . urlEncode False) input)
 
     describe "decodePathSegments" $ do
         it "is inverse to encodePathSegments" $
@@ -262,4 +270,4 @@ toStrictBS :: BB.Builder -> B.ByteString
 toStrictBS = BL.toStrict . BB.toLazyByteString
 
 toSimpleQuery :: Query -> SimpleQuery
-toSimpleQuery q = fmap (fromMaybe "") <$> q
+toSimpleQuery q = fmap (fromMaybe "") <$> q    
