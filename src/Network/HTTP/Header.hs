@@ -2,6 +2,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UnboxedTuples #-}
 
@@ -13,6 +14,10 @@
 -- header names, and to use list functions to go through the
 -- 'Network.HTTP.Types.Header.Headers'.
 module Network.HTTP.Header (
+    -- * HeaderMap
+
+    -- HeaderMap,
+
     -- * Header Names (HTTP Field Names)
 
     -- | The part of an HTTP Field before the colon:
@@ -46,6 +51,12 @@ module Network.HTTP.Header (
     headerNameToStringLower,
 
     -- ** Common Header Names
+    hAccept,
+    hAcceptCharset,
+    hAcceptEncoding,
+    hAcceptLanguage,
+    hAcceptRanges,
+    hAge,
 ) where
 
 import Control.Exception (throw, try)
@@ -370,3 +381,29 @@ arrayFromText (Text (ByteArray arr) _ _) = arr
 arrayFromText :: Text -> ByteArray#
 arrayFromText (Text (A.ByteArray arr) _ _) = arr
 #endif
+
+----------------------------- HEADERS FROM HERE ON -----------------------------
+
+hAccept :: HeaderName
+hAccept = unsafeParseNewHeaderName "Accept"
+{-# NOINLINE hAccept #-}
+
+hAcceptCharset :: HeaderName
+hAcceptCharset = unsafeParseNewHeaderName "Accept-Charset"
+{-# NOINLINE hAcceptCharset #-}
+
+hAcceptEncoding :: HeaderName
+hAcceptEncoding = unsafeParseNewHeaderName "Accept-Encoding"
+{-# NOINLINE hAcceptEncoding #-}
+
+hAcceptLanguage :: HeaderName
+hAcceptLanguage = unsafeParseNewHeaderName "Accept-Language"
+{-# NOINLINE hAcceptLanguage #-}
+
+hAcceptRanges :: HeaderName
+hAcceptRanges = unsafeParseNewHeaderName "Accept-Ranges"
+{-# NOINLINE hAcceptRanges #-}
+
+hAge :: HeaderName
+hAge = unsafeParseNewHeaderName "Age"
+{-# NOINLINE hAge #-}
