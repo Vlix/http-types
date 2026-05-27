@@ -8,10 +8,17 @@ module Main where
 import Control.DeepSeq (NFData (..))
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 (unpack)
-import Data.CaseInsensitive (mk)
+import qualified Data.ByteString.Char8 as B8
+import Data.CaseInsensitive (CI (..), mk)
 import Data.Functor ((<&>))
+import qualified Data.List as L
 import GHC.Generics (Generic)
-import Network.HTTP.Header as H (unsafeParseNewHeaderName)
+import Network.HTTP.Header as H (
+    encodeHeaderName,
+    encodeHeaderNameLower,
+    unsafeParseHeaderName,
+    unsafeParseNewHeaderName,
+ )
 import Network.HTTP.Header.Internal
 import Test.Tasty.Bench
 
@@ -26,22 +33,37 @@ headerNameBenches =
     , createBench
     , eqBench
     , lookupBench
+    , encodeBench
+    , encodeLowerBench
+    , sequenceOfOperationsNoEncoding $ head averageDDG
+    , sequenceOfOperationsNoEncoding $ last averageDDG
     ]
+
+benchBoth ::
+    String ->
+    [Benchmark] ->
+    ((String -> Benchmark -> Benchmark) -> [Benchmark]) ->
+    Benchmark
+benchBoth topName classicBench newBench =
+    bgroup
+        topName
+        [ bgroup "Classic" classicBench
+        , bgroup "New" . newBench $ \name b ->
+            bcompare (topName <> ".Classic." <> name) b
+        ]
 
 createBench1 :: Benchmark
 createBench1 =
-    bgroup
-        "Create1"
-        [ bgroup "Classic" $
-            allMarks <&> \(name, bss) ->
-                bench name $ nf mk bss
-        , bgroup "New" $
-            allMarks <&> \(name, bss) ->
-                bcompare ("Create1.Classic." <> name) $
-                    bench name $
-                        nf unsafeParseNewHeaderName bss
-        ]
+    benchBoth "Create1" classicBench $ \f ->
+        newBench ".Full" f unsafeParseHeaderName
+            ++ newBench ".New" f unsafeParseNewHeaderName
   where
+    classicBench =
+        allMarks <&> \(name, bss) -> bench name $ nf mk bss
+    newBench s f toHN =
+        allMarks <&> \(name, bss) ->
+            f name . bench (name <> s) $
+                nf toHN bss
     altSvc, sts :: ByteString
     altSvc = "Alt-Svc"
     sts = "Strict-Transport-Security"
@@ -52,18 +74,17 @@ createBench1 =
 
 createBench :: Benchmark
 createBench =
-    bgroup
-        "Create"
-        [ bgroup "Classic" $
-            allMarks <&> \(name, bss) ->
-                bench name $ nf (fmap mk) bss
-        , bgroup "New" $
-            allMarks <&> \(name, bss) ->
-                bcompare ("Create.Classic." <> name) $
-                    bench name $
-                        nf (fmap unsafeParseNewHeaderName) bss
-        ]
+    benchBoth "Create" classicBench $ \f ->
+        newBench ".Full" f unsafeParseHeaderName
+            ++ newBench ".New" f unsafeParseNewHeaderName
   where
+    classicBench =
+        allMarks <&> \(name, bss) ->
+            bench name $ nf (fmap mk) bss
+    newBench s f toHN =
+        allMarks <&> \(name, bss) ->
+            f name . bench (name <> s) $
+                nf (fmap toHN) bss
     allMarks =
         [ ("short-small", shortSmall)
         , ("long-small", longSmall)
@@ -72,22 +93,62 @@ createBench =
         , ("Average", averageDDG)
         ]
 
+encodeBench :: Benchmark
+encodeBench =
+    benchBoth "Encode" classicBench $ \f ->
+        newBench ".Full" f unsafeParseHeaderName
+            ++ newBench ".New" f unsafeParseNewHeaderName
+  where
+    hdrs :: [ByteString]
+    hdrs =
+        [ "TE"
+        , "Accept-Language"
+        , "Cross-Origin-Embedder-Policy-Report-Only"
+        ]
+    classicBench =
+        hdrs <&> \hdr ->
+            env (pure $ mk hdr) $
+                bench (B8.unpack hdr) . nf original
+    newBench s f toHN =
+        hdrs <&> \hdr ->
+            env (pure $ toHN hdr) $
+                let benchName = B8.unpack hdr
+                 in f benchName . bench (benchName <> s) . nf encodeHeaderName
+
+encodeLowerBench :: Benchmark
+encodeLowerBench =
+    benchBoth "Encode lower case" classicBench newBench
+  where
+    hdrs :: [ByteString]
+    hdrs =
+        [ "TE"
+        , "Accept-Language"
+        , "Cross-Origin-Embedder-Policy-Report-Only"
+        ]
+    classicBench =
+        hdrs <&> \hdr ->
+            env (pure $ mk hdr) $
+                bench (B8.unpack hdr) . nf foldedCase
+    newBench f =
+        hdrs <&> \hdr ->
+            env (pure $ unsafeParseNewHeaderName hdr) $
+                let benchName = B8.unpack hdr
+                 in f benchName . bench benchName . nf encodeHeaderNameLower
+
 eqBench :: Benchmark
 eqBench =
-    bgroup
-        "Eq"
-        [ bgroup "Classic" $
-            allMarks <&> \(name, bss) ->
-                env (pure (mk <$> bss)) $
-                    bench name . nf (\x -> x == x)
-        , bgroup "New" $
-            allMarks <&> \(name, bss) ->
-                env (pure (unsafeParseNewHeaderName <$> bss, unsafeParseNewHeaderName <$> bss)) $
-                    bcompare ("Eq.Classic." <> name)
-                        . bench name
-                        . nf (uncurry (==))
-        ]
+    benchBoth "Eq" classicBench newBench
   where
+    classicBench =
+        allMarks <&> \(name, bss) ->
+            env (pure (mk <$> bss)) $
+                bench name . nf (\x -> x == x)
+    newBench f =
+        allMarks <&> \(name, bss) ->
+            env (pure (unsafeParseNewHeaderName <$> bss, unsafeParseNewHeaderName <$> bss)) $
+                f name
+                    . bench name
+                    . nf (uncurry (==))
     allMarks =
         [ ("short-small", shortSmall)
         , ("long-small", longSmall)
@@ -98,21 +159,21 @@ eqBench =
 
 lookupBench :: Benchmark
 lookupBench =
-    bgroup
-        "Lookup"
-        [ bgroup "Classic" $
-            allMarks <&> \(hdr, name, bss) ->
-                mkEnv mk hdr bss $
-                    bench (unpack hdr <> "." <> name) . nf (uncurry lookup)
-        , bgroup "New" $
-            allMarks <&> \(hdr, name, bss) ->
-                let benchName = unpack hdr <> "." <> name
-                 in mkEnv unsafeParseNewHeaderName hdr bss $
-                        bcompare ("Lookup.Classic." <> benchName)
-                            . bench benchName
-                            . nf (uncurry lookup)
-        ]
+    benchBoth "Lookup" classicBench newBench
   where
+    classicBench =
+        allMarks <&> \(hdr, name, bss) ->
+            mkEnv mk hdr bss $
+                bench (unpack hdr <> "." <> name) . nf (uncurry lookup)
+    newBench f =
+        let go s toHN =
+                allMarks <&> \(hdr, name, bss) ->
+                    let benchName = unpack hdr <> "." <> name
+                     in mkEnv toHN hdr bss $
+                            f benchName
+                                . bench (benchName <> s)
+                                . nf (uncurry lookup)
+         in go ".Full" unsafeParseHeaderName ++ go ".New" unsafeParseNewHeaderName
     mkEnv f hdr bss = env $ pure (f hdr, toKeyValueList f bss)
     allMarks =
         [ ("Age", "short-small", shortSmall)
@@ -121,6 +182,42 @@ lookupBench =
         , ("Via", "short-big", shortBig)
         ]
     toKeyValueList f = fmap $ \x -> (f x, ())
+
+sequenceOfOperationsNoEncoding :: ByteString -> Benchmark
+sequenceOfOperationsNoEncoding lookupHdrBS =
+    benchBoth ("Sequence of operations." <> B8.unpack lookupHdrBS) classicBench newBench
+  where
+    runAll :: (Eq a) => (ByteString -> a) -> [ByteString] -> Bool
+    runAll f bss =
+        let allHdrs = fmap f bss
+            extraHdr = f "Connection"
+            replaceHdr =
+                let h = f "Content-Type"
+                 in (h :) . L.delete h
+            deleteHdr = L.delete $ f "Cache-Control"
+            lookupHdr = f lookupHdrBS
+            finalHdrs = deleteHdr . replaceHdr $ extraHdr : allHdrs
+         in L.elem lookupHdr finalHdrs
+    benchName = "Average"
+    classicBench =
+        [bench benchName $ nf (runAll (mk :: ByteString -> CI ByteString)) averageDDG]
+    newBench f =
+        [ f benchName . bench (benchName <> ".Full") $ nf (runAll unsafeParseHeaderName) averageDDG
+        , f benchName . bench (benchName <> ".New") $ nf (runAll unsafeParseNewHeaderName) averageDDG
+        ]
+
+-- parseHeaders :: String -> Benchmark
+-- parseHeaders name =
+--     env (readFile "bench/headers.txt") $ \bs ->
+--         benchBoth name (classicBench bs) (newBench bs)
+--   where
+--     getHdrs f bs = do
+
+--     classicBench =
+--         bench "headers" . getHdrs mk
+--     newBench bs f =
+--         let n = "headers"
+--          in f n . bench n $ getHdrs unsafeParseHeaderName bs
 
 shortSmall, longSmall, shortBig, longBig, averageDDG :: [ByteString]
 shortSmall = ["Age", "TE", "Tk", "Via"]
