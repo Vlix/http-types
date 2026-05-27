@@ -48,8 +48,6 @@ module Network.HTTP.Header (
     -- ** Common Header Names
 ) where
 
--- hAcceptLanguage,
-
 import Control.Exception (throw, try)
 import Control.Monad (when)
 import Control.Monad.ST (runST, stToIO)
@@ -72,24 +70,31 @@ import GHC.Exts (
     ByteArray#,
     Int (..),
     Ptr (..),
+    clz64#,
     indexWord8Array#,
-    sizeofByteArray#,
     uncheckedShiftL64#,
+    word2Int#,
     (+#),
  )
 import GHC.IO.Unsafe (unsafeDupablePerformIO)
 import GHC.Word (Word64 (..), Word8 (..))
-import Network.HTTP.Header.Internal
+import Network.HTTP.Header.Internal (
+    Bitmap (..),
+    HeaderName (..),
+    HeaderNameException (..),
+    bitmapIsZero,
+    bitmapToList,
+ )
 import Network.HTTP.LowLevel (
     adjustBitmap,
     copyByteArrayToAddr,
     finalShift,
     foldByteArrayR,
-    indexWord8Array,
     indexWord8OffRawAddr,
     isBadChar,
     isMod64,
     newByteArray,
+    sizeOfByteArray,
     strictIndex,
     toHeaderNameHelper,
     unsafeFreezeByteArray,
@@ -203,35 +208,31 @@ toHeaderNameStrict bs =
 -- 'ByteString' from the internal 'ByteArray' + casing bitmap.
 encodeHeaderName :: HeaderName -> ByteString
 encodeHeaderName (HeaderName (Just bs) _ _) = bs
-encodeHeaderName (HeaderName _ arr@(ByteArray ba) bm) =
-    unsafeCreate baLen $
-        if bitmapIsZero bm
-            then stToIO . copyByteArrayToAddr arr
-            else loop 0 bm
+encodeHeaderName (HeaderName _ arr bitmap) =
+    unsafeCreate (sizeOfByteArray arr) $ \ptr -> do
+        stToIO $ copyByteArrayToAddr arr ptr
+        go bitmap ptr
   where
-    baLen = I# (sizeofByteArray# ba)
-    firstBit = 0x8000_0000_0000_0000
-    loop ix bitmap ptr = do
-        poke ptr char
-        if newIx == baLen
+    go (OneWord w64) ptr = oneWord w64 ptr
+    go (MoreWords w64 more) ptr = do
+        oneWord w64 ptr
+        go more $ ptr `plusPtr` 64
+    unsetFirstBit :: Word64 -> Word64
+    unsetFirstBit w64 = w64 .&. 0x7FFF_FFFF_FFFF_FFFF
+    -- this unsets the 0x20 bit
+    capitalize :: Word8 -> Word8
+    capitalize w8 = w8 .&. 0xDF
+    oneWord (W64# w64#) ptr = do
+        if I# clz# == 64
             then pure ()
-            else loop newIx nextBitmap (ptr `plusPtr` 1)
+            else do
+                let newPtr = ptr `plusPtr` I# clz#
+                peek newPtr >>= poke newPtr . capitalize
+                let adjustedW64 =
+                        unsetFirstBit $ W64# (w64# `uncheckedShiftL64#` clz#)
+                oneWord adjustedW64 newPtr
       where
-        w8 = indexWord8Array arr ix
-        getW64 (OneWord w64) = w64
-        getW64 (MoreWords w64 _) = w64
-        char =
-            if getW64 bitmap .&. firstBit == 0
-                then w8
-                else w8 - 0x20
-        nextBitmap =
-            case bitmap of
-                MoreWords w64 next
-                    | isMod64 newIx -> next
-                    | otherwise ->
-                        MoreWords (w64 `unsafeShiftL` 1) next
-                OneWord w64 -> OneWord (w64 `unsafeShiftL` 1)
-        newIx = ix + 1
+        clz# = word2Int# (clz64# w64#)
 
 -- | Encode the 'HeaderName' to a lower-case 'ByteString'.
 --
@@ -242,18 +243,16 @@ encodeHeaderName (HeaderName _ arr@(ByteArray ba) bm) =
 encodeHeaderNameLower :: HeaderName -> ByteString
 encodeHeaderNameLower (HeaderName (Just bs) _ bm)
     | bitmapIsZero bm = bs
-encodeHeaderNameLower (HeaderName _ ba@(ByteArray arr) _) =
-    unsafeCreate baLen $
+encodeHeaderNameLower (HeaderName _ ba _) =
+    unsafeCreate (sizeOfByteArray ba) $
         stToIO . copyByteArrayToAddr ba
-  where
-    baLen = I# (sizeofByteArray# arr)
 
 -- | Creates a 'HeaderName' from the given 'String', while checking
 -- for any invalid characters.
 parseHeaderNameFromString :: String -> Either (HeaderNameException String) HeaderName
 parseHeaderNameFromString s =
     case find isBadChar' s of
-        Just c ->  Left (InvalidFieldNameByte s c)
+        Just c -> Left (InvalidFieldNameByte s c)
         Nothing -> runST $ do
             mba <- newByteArray len
             mkBitmapRef <- newSTRef (id :: Bitmap -> Bitmap)
