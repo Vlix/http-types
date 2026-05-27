@@ -35,9 +35,7 @@ spec =
         it "uses valid chars" $ do
             traverse_ isValidChar allValidHeaderNameChars
         roundTripIt "ByteString" roundTripByteString
-        roundTripIt "held ByteString" roundTripByteStringKeep
         roundTripIt "unsafe ByteString" roundTripByteStringUnsafe
-        roundTripIt "held unsafe ByteString" roundTripByteStringUnsafeKeep
         roundTripIt "String" roundTripString
         roundTripIt "Text" roundTripText
         prop "encodes to lowercase ByteString" $
@@ -67,7 +65,7 @@ spec =
         name = "roundtrips " <> s <> "s correctly"
 
 roundTripByteString :: ByteString -> (Expectation, Property)
-roundTripByteString = headerRoundtrip parseNewHeaderName id
+roundTripByteString = headerRoundtrip parseHeaderName id
 
 roundTripString :: String -> (Expectation, Property)
 roundTripString = headerRoundtrip parseHeaderNameFromString B8.unpack
@@ -75,14 +73,8 @@ roundTripString = headerRoundtrip parseHeaderNameFromString B8.unpack
 roundTripText :: Text -> (Expectation, Property)
 roundTripText = headerRoundtrip parseHeaderNameFromText decodeUtf8
 
-roundTripByteStringKeep :: ByteString -> (Expectation, Property)
-roundTripByteStringKeep = headerRoundtrip parseHeaderName id
-
 roundTripByteStringUnsafe :: ByteString -> (Expectation, Property)
-roundTripByteStringUnsafe = headerRoundtrip (Right . unsafeParseNewHeaderName) id
-
-roundTripByteStringUnsafeKeep :: ByteString -> (Expectation, Property)
-roundTripByteStringUnsafeKeep = headerRoundtrip (Right . unsafeParseHeaderName) id
+roundTripByteStringUnsafe = headerRoundtrip (Right . unsafeParseHeaderName) id
 
 newtype AllowedHeaderName a = AllowedHeaderName {getHeaderName :: a}
     deriving (Show)
@@ -102,7 +94,6 @@ instance Arbitrary HeaderName where
 allValidHeaderNameChars :: String
 allValidHeaderNameChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!#$%&'*+-.^_`|~0123456789"
 
--- | Round trip test that doesn't hold on to the original 'ByteString'
 headerRoundtrip ::
     (Eq a, Show a, Typeable a) =>
     (a -> Either (HeaderNameException a) HeaderName) ->

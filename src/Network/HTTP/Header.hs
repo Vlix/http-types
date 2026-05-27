@@ -33,7 +33,6 @@ module Network.HTTP.Header (
     -- HTTP Field Names
     HeaderNameException (..),
     parseHeaderName,
-    parseNewHeaderName,
     parseHeaderNameFromString,
     parseHeaderNameFromText,
 
@@ -42,7 +41,6 @@ module Network.HTTP.Header (
     -- | These functions will throw an exception if they encounter an illegal
     -- byte in the to-be-parsed header name.
     unsafeParseHeaderName,
-    unsafeParseNewHeaderName,
 
     -- ** Encoding
     encodeHeaderName,
@@ -113,69 +111,31 @@ import Network.HTTP.LowLevel (
     writeWord8Array,
  )
 
--- | Creates a 'HeaderName' from the given 'ByteString' while holding on
--- to the original 'ByteString', in case of later reuse.
+-- | Creates a 'HeaderName' from the given 'ByteString'.
 parseHeaderName :: ByteString -> Either (HeaderNameException ByteString) HeaderName
-parseHeaderName hdr =
-    parseHeaderName' hdr $ HeaderName (Just hdr)
-
--- | Creates a 'HeaderName' from the given 'ByteString' /without/ holding on
--- to the original 'ByteString'.
---
--- Could lead to quicker garbage collection.
-parseNewHeaderName :: ByteString -> Either (HeaderNameException ByteString) HeaderName
-parseNewHeaderName hdr =
-    parseHeaderName' hdr $ HeaderName Nothing
-
-parseHeaderName' ::
-    ByteString ->
-    (ByteArray -> Bitmap -> HeaderName) ->
-    Either (HeaderNameException ByteString) HeaderName
-parseHeaderName' hdr mkHeader
+parseHeaderName hdr
     | size <= 0 = Left EmptyHeader
     | otherwise =
-        unsafeDupablePerformIO $
-            try (uncurry mkHeader <$> toHeaderNameStrict hdr)
+        unsafeDupablePerformIO $ try (toHeaderNameStrict hdr)
   where
     size = B.length hdr
-{-# INLINE parseHeaderName' #-}
+{-# INLINE parseHeaderName #-}
 
 -- | __Will throw an 'InvalidFieldNameByte' exception if the 'ByteString'__
 -- __contains any bytes not defined in__
 -- [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.6.2)
 --
--- Creates a 'HeaderName' from the given 'ByteString' while holding on
--- to the original 'ByteString', in case of later reuse.
+-- Creates a 'HeaderName' from the given 'ByteString'.
 unsafeParseHeaderName :: ByteString -> HeaderName
-unsafeParseHeaderName hdr =
-    unsafeParseHeaderName' hdr $ HeaderName (Just hdr)
-
--- | __Will throw an 'InvalidFieldNameByte' exception if the 'ByteString'__
--- __contains any bytes not defined in__
--- [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.6.2)
---
--- Creates a 'HeaderName' from the given 'ByteString' /without/ holding on
--- to the original 'ByteString'.
---
--- Could lead to quicker garbage collection.
-unsafeParseNewHeaderName :: ByteString -> HeaderName
-unsafeParseNewHeaderName hdr =
-    unsafeParseHeaderName' hdr $ HeaderName Nothing
-
-unsafeParseHeaderName' ::
-    ByteString ->
-    (ByteArray -> Bitmap -> HeaderName) ->
-    HeaderName
-unsafeParseHeaderName' hdr mkHeader
+unsafeParseHeaderName hdr
     | size <= 0 = throw (EmptyHeader :: HeaderNameException String)
     | otherwise =
-        unsafeDupablePerformIO $
-            uncurry mkHeader <$> toHeaderNameStrict hdr
+        unsafeDupablePerformIO $ toHeaderNameStrict hdr
   where
     size = B.length hdr
-{-# INLINE unsafeParseHeaderName' #-}
+{-# INLINE unsafeParseHeaderName #-}
 
-toHeaderNameStrict :: ByteString -> IO (ByteArray, Bitmap)
+toHeaderNameStrict :: ByteString -> IO HeaderName
 toHeaderNameStrict bs =
     withNewByteArray bs $ \ptr mba -> do
         mkBitmapRef <- newSTRef (id :: Bitmap -> Bitmap)
@@ -198,7 +158,7 @@ toHeaderNameStrict bs =
                     let finalBitmap = newBitmap# `uncheckedShiftL64#` finalShift#
                         !finishedBitmap =
                             mkBitmap $ OneWord (W64# finalBitmap)
-                    pure (ba, finishedBitmap)
+                    pure (HeaderName ba finishedBitmap)
                 else do
                     W64# nextBitmap# <- updateRef newBitmap#
                     loop nextBitmap# nextIx#
@@ -218,8 +178,7 @@ toHeaderNameStrict bs =
 -- the original 'ByteString' that was used to create it, or it creates a
 -- 'ByteString' from the internal 'ByteArray' + casing bitmap.
 encodeHeaderName :: HeaderName -> ByteString
-encodeHeaderName (HeaderName (Just bs) _ _) = bs
-encodeHeaderName (HeaderName _ arr bitmap) =
+encodeHeaderName (HeaderName arr bitmap) =
     unsafeCreate (sizeOfByteArray arr) $ \ptr -> do
         stToIO $ copyByteArrayToAddr arr ptr
         go bitmap ptr
@@ -252,9 +211,7 @@ encodeHeaderName (HeaderName _ arr bitmap) =
 -- > let hn = unsafeParseHeaderName "Content-Type"
 -- > encodeHeaderNameLower hn == "content-type"
 encodeHeaderNameLower :: HeaderName -> ByteString
-encodeHeaderNameLower (HeaderName (Just bs) _ bm)
-    | bitmapIsZero bm = bs
-encodeHeaderNameLower (HeaderName _ ba _) =
+encodeHeaderNameLower (HeaderName ba _) =
     unsafeCreate (sizeOfByteArray ba) $
         stToIO . copyByteArrayToAddr ba
 
@@ -283,7 +240,7 @@ parseHeaderNameFromString s =
                     ba <- unsafeFreezeByteArray mba
                     mkBitmap <- readSTRef mkBitmapRef
                     let finalBitmap = mkBitmap (OneWord (W64# (newBitmap# `uncheckedShiftL64#` finalShift#)))
-                    pure $ Right (HeaderName Nothing ba finalBitmap)
+                    pure $ Right (HeaderName ba finalBitmap)
                 else do
                     W64# nextBitmap# <- updateRef newBitmap#
                     loop nextBitmap# nextIx# cs
@@ -300,7 +257,7 @@ parseHeaderNameFromString s =
 
 -- | Turn the 'HeaderName' into a case-sensitive 'String'.
 headerNameToString :: HeaderName -> String
-headerNameToString (HeaderName _ arr bm)
+headerNameToString (HeaderName arr bm)
     | bitmapIsZero bm = lowerCastList
     | otherwise =
         zipWith toChar lowerCastList $
@@ -322,7 +279,7 @@ headerNameToString (HeaderName _ arr bm)
 -- > let hn = unsafeParseHeaderName "Content-Type"
 -- > headerNameToStringLower hn == "content-type"
 headerNameToStringLower :: HeaderName -> String
-headerNameToStringLower (HeaderName _ arr _) = arrayToStringLower arr
+headerNameToStringLower (HeaderName arr _) = arrayToStringLower arr
 {-# INLINE headerNameToStringLower #-}
 
 arrayToStringLower :: ByteArray -> [Char]
@@ -357,7 +314,7 @@ parseHeaderNameFromText txt
                         ba <- unsafeFreezeByteArray mba
                         mkBitmap <- readSTRef mkBitmapRef
                         let finalBitmap = mkBitmap (OneWord (W64# (newBitmap# `uncheckedShiftL64#` finalShift#)))
-                        pure $ Right (HeaderName Nothing ba finalBitmap)
+                        pure $ Right (HeaderName ba finalBitmap)
                     else do
                         (W64# nextBitmap#) <- updateRef newBitmap#
                         loop nextBitmap# nextIx#
@@ -385,25 +342,25 @@ arrayFromText (Text (A.ByteArray arr) _ _) = arr
 ----------------------------- HEADERS FROM HERE ON -----------------------------
 
 hAccept :: HeaderName
-hAccept = unsafeParseNewHeaderName "Accept"
+hAccept = unsafeParseHeaderName "Accept"
 {-# NOINLINE hAccept #-}
 
 hAcceptCharset :: HeaderName
-hAcceptCharset = unsafeParseNewHeaderName "Accept-Charset"
+hAcceptCharset = unsafeParseHeaderName "Accept-Charset"
 {-# NOINLINE hAcceptCharset #-}
 
 hAcceptEncoding :: HeaderName
-hAcceptEncoding = unsafeParseNewHeaderName "Accept-Encoding"
+hAcceptEncoding = unsafeParseHeaderName "Accept-Encoding"
 {-# NOINLINE hAcceptEncoding #-}
 
 hAcceptLanguage :: HeaderName
-hAcceptLanguage = unsafeParseNewHeaderName "Accept-Language"
+hAcceptLanguage = unsafeParseHeaderName "Accept-Language"
 {-# NOINLINE hAcceptLanguage #-}
 
 hAcceptRanges :: HeaderName
-hAcceptRanges = unsafeParseNewHeaderName "Accept-Ranges"
+hAcceptRanges = unsafeParseHeaderName "Accept-Ranges"
 {-# NOINLINE hAcceptRanges #-}
 
 hAge :: HeaderName
-hAge = unsafeParseNewHeaderName "Age"
+hAge = unsafeParseHeaderName "Age"
 {-# NOINLINE hAge #-}

@@ -8,7 +8,6 @@ module Network.HTTP.Header.Internal where
 import Control.Exception (Exception)
 import Data.Array.Byte (ByteArray (..))
 import Data.Bits (unsafeShiftR, (.&.), (.|.))
-import qualified Data.ByteString as B (ByteString)
 import Data.Char (chr)
 import Data.List (intercalate)
 import Data.Typeable (Typeable)
@@ -29,7 +28,7 @@ import Network.HTTP.LowLevel (indexWord8Array, isBadChar, sizeOfByteArray)
 -- the original 'B.ByteString' from which it was parsed.
 -- (/if it was parsed from a 'B.ByteString', of course/)
 data HeaderName
-    = HeaderName (Maybe B.ByteString) !ByteArray !Bitmap
+    = HeaderName !ByteArray !Bitmap
     deriving (Eq, Show)
 
 -- FIXME: Hanging on to the 'ByteString' makes lookups and other
@@ -41,17 +40,17 @@ data HeaderName
 
 -- | Access the inner 'ByteArray' of the 'HeaderName'
 unsafeGetByteArray :: HeaderName -> ByteArray
-unsafeGetByteArray (HeaderName _ ba _) = ba
+unsafeGetByteArray (HeaderName ba _) = ba
 {-# INLINE unsafeGetByteArray #-}
 
 -- | Access the inner 'ByteString' of the 'HeaderName'
-unsafeGetByteString :: HeaderName -> Maybe B.ByteString
-unsafeGetByteString (HeaderName mbs _ _) = mbs
-{-# INLINE unsafeGetByteString #-}
+-- unsafeGetByteString :: HeaderName -> Maybe B.ByteString
+-- unsafeGetByteString (HeaderName mbs _ _) = mbs
+-- {-# INLINE unsafeGetByteString #-}
 
 -- | Access the inner 'ByteString' of the 'HeaderName'
 unsafeGetBitmap :: HeaderName -> Bitmap
-unsafeGetBitmap (HeaderName _ _ bm) = bm
+unsafeGetBitmap (HeaderName _ bm) = bm
 {-# INLINE unsafeGetBitmap #-}
 
 -- | Bits from "left-to-right" that show which bytes were
@@ -114,7 +113,7 @@ w64s =
 -- only allow visible characters that are _not_ delimiters. (though the
 -- convention is to only use alpha-numeric characters and the minus character)
 isValidHeaderName :: HeaderName -> Bool
-isValidHeaderName (HeaderName _ arr _) =
+isValidHeaderName (HeaderName arr _) =
     case baLen of
         0 -> False
         _ -> loop 0
