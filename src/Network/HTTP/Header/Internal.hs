@@ -13,8 +13,7 @@ import Data.Char (chr)
 import Data.List (intercalate)
 import Data.Typeable (Typeable)
 import Data.Word (Word64)
-import GHC.Exts (Int (..), sizeofByteArray#)
-import Network.HTTP.LowLevel (indexWord8Array, isBadChar)
+import Network.HTTP.LowLevel (indexWord8Array, isBadChar, sizeOfByteArray)
 
 -- | HTTP Field Name (Header name)
 --
@@ -33,6 +32,13 @@ data HeaderName
     = HeaderName (Maybe B.ByteString) !ByteArray !Bitmap
     deriving (Eq, Show)
 
+-- FIXME: Hanging on to the 'ByteString' makes lookups and other
+-- non-encoding actions a LOT slower (almost 10x times even)
+-- So add some benchmarks for how intensive creating a 'ByteString'
+-- from a 'HeaderName' is, to compare with taking 160ns more for one compare.
+-- Keep in mind that encoding will almost always only happen once,
+-- so optimizing for that is probably not the way to go.
+
 -- | Access the inner 'ByteArray' of the 'HeaderName'
 unsafeGetByteArray :: HeaderName -> ByteArray
 unsafeGetByteArray (HeaderName _ ba _) = ba
@@ -42,6 +48,11 @@ unsafeGetByteArray (HeaderName _ ba _) = ba
 unsafeGetByteString :: HeaderName -> Maybe B.ByteString
 unsafeGetByteString (HeaderName mbs _ _) = mbs
 {-# INLINE unsafeGetByteString #-}
+
+-- | Access the inner 'ByteString' of the 'HeaderName'
+unsafeGetBitmap :: HeaderName -> Bitmap
+unsafeGetBitmap (HeaderName _ _ bm) = bm
+{-# INLINE unsafeGetBitmap #-}
 
 -- | Bits from "left-to-right" that show which bytes were
 -- originally upper-case.
@@ -103,12 +114,12 @@ w64s =
 -- only allow visible characters that are _not_ delimiters. (though the
 -- convention is to only use alpha-numeric characters and the minus character)
 isValidHeaderName :: HeaderName -> Bool
-isValidHeaderName (HeaderName _ arr@(ByteArray ba) _) =
+isValidHeaderName (HeaderName _ arr _) =
     case baLen of
         0 -> False
         _ -> loop 0
   where
-    baLen = I# (sizeofByteArray# ba)
+    baLen = sizeOfByteArray arr
     loop ix
         | ix == baLen = True
         | isBadChar (indexWord8Array arr ix) = False
