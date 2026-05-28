@@ -21,13 +21,16 @@ import GHC.Exts (
     eqWord8#,
     indexWord8Array#,
     indexWord8OffAddr#,
+    int2Word#,
     isTrue#,
     newByteArray#,
     or64#,
+    ord#,
     sizeofByteArray#,
     unsafeFreezeByteArray#,
     word2Int#,
     word8ToWord#,
+    wordToWord8#,
     writeWord8Array#,
  )
 import GHC.ST (ST (..))
@@ -156,3 +159,7 @@ adjustBitmap w1 w2 bitmap
 w2c :: Word8 -> Char
 w2c (W8# w8) = C# (chr# (word2Int# (word8ToWord# w8)))
 {-# INLINE w2c #-}
+
+c2w :: Char -> Word8
+c2w (C# c) = W8# (wordToWord8# (int2Word# (ord# c)))
+{-# INLINE c2w #-}

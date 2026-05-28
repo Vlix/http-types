@@ -2,9 +2,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE UnboxedTuples #-}
 
 -- | A new implementation of "HTTP Headers" (HTTP Fields).
 --
@@ -17,6 +14,8 @@ module Network.HTTP.Header (
     -- * HeaderMap
 
     -- HeaderMap,
+    -- RequestHeaders,
+    -- ResponseHeaders,
 
     -- * Header Names (HTTP Field Names)
 
@@ -67,9 +66,8 @@ import Control.Monad (when)
 import Control.Monad.ST (runST, stToIO)
 import Data.Array.Byte (ByteArray (..))
 import qualified Data.ByteString as B (length)
-import Data.ByteString.Internal (ByteString (BS), c2w, unsafeCreate, w2c)
-import Data.Char (ord, toUpper)
-import Data.List (find)
+import Data.ByteString.Internal (ByteString (BS), unsafeCreate)
+import Data.Char (toUpper)
 import Data.STRef (modifySTRef, newSTRef, readSTRef)
 import Data.Text (Text)
 #if !MIN_VERSION_text(1,2,0)
@@ -88,36 +86,38 @@ import GHC.Exts (
     indexWord8Array#,
     indexWord8OffAddr#,
     uncheckedShiftL64#,
-    unpackCString#,
     word2Int#,
     (+#),
  )
 import GHC.IO.Unsafe (unsafeDupablePerformIO)
 import GHC.Word (Word64 (..), Word8 (..))
+import Network.HTTP.Header.Constants
 import Network.HTTP.Header.Internal (
     Bitmap (..),
     HeaderName (..),
     HeaderNameException (..),
     bitmapIsZero,
     bitmapToList,
-    unsafePackLiteral,
+    parseHeaderNameFromString,
  )
 import Network.HTTP.LowLevel (
     adjustBitmap,
     copyByteArrayToAddr,
     finalShift,
     indexWord8OffRawAddr,
-    isBadChar,
     isMod64,
     newByteArray,
     sizeOfByteArray,
     strictIndex,
     unsafeByteArrayToString,
     unsafeFreezeByteArray,
+    w2c,
     writeWord8Array,
  )
 
--- | Creates a 'HeaderName' from the given 'ByteString'.
+-- | Tries to create a 'HeaderName' from the given 'ByteString', while checking
+-- for any invalid characters. A zero-length argument will result in
+-- @Left 'EmptyHeaderName'@.
 parseHeaderName :: ByteString -> Either (HeaderNameException ByteString) HeaderName
 parseHeaderName hdr
     | size <= 0 = Left EmptyHeaderName
@@ -128,7 +128,8 @@ parseHeaderName hdr
 
 -- | __Will throw an 'InvalidFieldNameByte' exception if the 'ByteString'__
 -- __contains any bytes not defined in__
--- [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.6.2)
+-- [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.6.2),
+-- __or an 'EmptyHeaderName' if the provided 'ByteString' is empty.__
 --
 -- Creates a 'HeaderName' from the given 'ByteString'.
 unsafeParseHeaderName :: ByteString -> HeaderName
@@ -215,54 +216,12 @@ encodeHeaderNameToPtr (HeaderName arr bitmap) startPtr = do
 
 -- | Encode the 'HeaderName' to a lower-case 'ByteString'.
 --
--- Will return the held 'ByteString' if it was already lower-case.
---
 -- > let hn = unsafeParseHeaderName "Content-Type"
 -- > encodeHeaderNameLower hn == "content-type"
 encodeHeaderNameLower :: HeaderName -> ByteString
 encodeHeaderNameLower (HeaderName ba _) =
     unsafeCreate (sizeOfByteArray ba) $
         stToIO . copyByteArrayToAddr ba
-
--- | Creates a 'HeaderName' from the given 'String', while checking
--- for any invalid characters.
-parseHeaderNameFromString :: String -> Either (HeaderNameException String) HeaderName
-parseHeaderNameFromString s =
-    case find isBadChar' s of
-        Just c -> Left (InvalidFieldNameByte s c)
-        Nothing -> runST $ do
-            mba <- newByteArray len
-            mkBitmapRef <- newSTRef (id :: Bitmap -> Bitmap)
-            go mkBitmapRef mba
-  where
-    isBadChar' c = c > '\xFF' || isBadChar (c2w c)
-    len = length s
-    !(W64# zero#) = 0
-    !(I# finalShift#) = finalShift len
-    go mkBitmapRef mba = loop zero# 0# s
-      where
-        loop _ _ [] = pure (Left EmptyHeader)
-        loop bitmap# ix# (c : cs) = do
-            writeWord8Array mba ix# convertedChar#
-            if I# nextIx# == len
-                then do
-                    ba <- unsafeFreezeByteArray mba
-                    mkBitmap <- readSTRef mkBitmapRef
-                    let finalBitmap = mkBitmap (OneWord (W64# (newBitmap# `uncheckedShiftL64#` finalShift#)))
-                    pure $ Right (HeaderName ba finalBitmap)
-                else do
-                    W64# nextBitmap# <- updateRef newBitmap#
-                    loop nextBitmap# nextIx# cs
-          where
-            charInt = ord c
-            !(W8# originalChar#) = fromIntegral charInt
-            convertedChar# = indexWord8OffRawAddr strictIndex (fromIntegral (W8# originalChar#))
-            newBitmap# = adjustBitmap originalChar# convertedChar# bitmap#
-            nextIx# = ix# +# 1#
-            updateRef w64
-                | isMod64 (I# nextIx#) =
-                    0 <$ modifySTRef mkBitmapRef (. MoreWords (W64# w64))
-                | otherwise = pure (W64# (w64 `uncheckedShiftL64#` 1#))
 
 -- | Turn the 'HeaderName' into a case-sensitive 'String'.
 headerNameToString :: HeaderName -> String
@@ -289,8 +248,9 @@ headerNameToStringLower :: HeaderName -> String
 headerNameToStringLower (HeaderName arr _) = unsafeByteArrayToString arr
 {-# INLINE headerNameToStringLower #-}
 
--- | Creates a 'HeaderName' from the given 'Text', while checking
--- for any invalid characters.
+-- | Tries to create a 'HeaderName' from the given 'Text', while checking
+-- for any invalid characters. A zero-length argument will result in
+-- @Left 'EmptyHeaderName'@.
 parseHeaderNameFromText :: Text -> Either (HeaderNameException Text) HeaderName
 #if !MIN_VERSION_text(1,2,0)
 parseHeaderNameFromText = encodeHeaderName . encodeUtf8
@@ -343,41 +303,3 @@ arrayFromText (Text (ByteArray arr) _ _) = arr
 arrayFromText :: Text -> ByteArray#
 arrayFromText (Text (A.ByteArray arr) _ _) = arr
 #endif
-
------------------------------ HEADERS FROM HERE ON -----------------------------
-
-hAccept :: HeaderName
-hAccept = unsafeMkHeaderName "accept" 0x8000000000000000
-
-hAcceptCharset :: HeaderName
-hAcceptCharset = unsafeMkHeaderName "accept-charset" 0x8100000000000000
-
-hAcceptEncoding :: HeaderName
-hAcceptEncoding = unsafeMkHeaderName "accept-encoding" 0x8100000000000000
-
-hAcceptLanguage :: HeaderName
-hAcceptLanguage = unsafeMkHeaderName "accept-language" 0x8100000000000000
-
-hAcceptRanges :: HeaderName
-hAcceptRanges = unsafeMkHeaderName "accept-ranges" 0x8100000000000000
-
-hAge :: HeaderName
-hAge = unsafeMkHeaderName "age" 0x8000000000000000
-
--- | ONLY to be used as function to create constant 'HeaderName's.
--- Should NEVER be exposed!
---
--- RULES ensure that the constant does not go through 'String',
--- but that the literal 'Addr#' gets used as efficiently as possible.
-unsafeMkHeaderName :: String -> Word64 -> HeaderName
-unsafeMkHeaderName s w64 =
-    case parseHeaderNameFromString s of
-        Right (HeaderName hn _) -> HeaderName hn $ OneWord w64
-        Left _ -> error $ "http-types: failed to parse literal header name: " <> s
-{-# INLINE [0] unsafeMkHeaderName #-}
-
-{-# RULES
-"HeaderName unsafeMkHeaderName/packAddress" forall s w64.
-    unsafeMkHeaderName (unpackCString# s) (W64# w64) =
-        unsafePackLiteral s w64
-    #-}

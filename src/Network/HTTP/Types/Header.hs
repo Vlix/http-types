@@ -71,8 +71,8 @@ module Network.HTTP.Types.Header (
     hUserAgent,
     hVary,
     hVia,
-    hWWWAuthenticate,
     hWarning,
+    hWWWAuthenticate,
 
     -- ** Byte ranges
 

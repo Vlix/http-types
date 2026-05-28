@@ -1,8 +1,8 @@
-{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE NumericUnderscores #-}
-{-# LANGUAGE UnboxedTuples #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Network.HTTP.Header.Internal where
 
@@ -10,13 +10,36 @@ import Control.Exception (Exception)
 import Control.Monad.ST (runST)
 import Data.Array.Byte (ByteArray (..))
 import Data.Bits (unsafeShiftR, (.&.), (.|.))
-import Data.Char (chr)
-import Data.List (intercalate)
+import Data.Char (chr, ord)
+import Data.List (find, intercalate)
+import Data.STRef (modifySTRef, newSTRef, readSTRef)
 import Data.Typeable (Typeable)
 import Data.Word (Word64)
-import GHC.Exts (Addr#, Int (..), Word64#, cstringLength#)
-import GHC.Word (Word64 (..))
-import Network.HTTP.LowLevel (copyAddrToByteArray, indexWord8Array, isBadChar, newByteArray, sizeOfByteArray, unsafeFreezeByteArray)
+import GHC.Exts (
+    Addr#,
+    Int (..),
+    Word64#,
+    cstringLength#,
+    uncheckedShiftL64#,
+    unpackCString#,
+    (+#),
+ )
+import GHC.Word (Word64 (..), Word8 (..))
+import Network.HTTP.LowLevel (
+    adjustBitmap,
+    c2w,
+    copyAddrToByteArray,
+    finalShift,
+    indexWord8Array,
+    indexWord8OffRawAddr,
+    isBadChar,
+    isMod64,
+    newByteArray,
+    sizeOfByteArray,
+    strictIndex,
+    unsafeFreezeByteArray,
+    writeWord8Array,
+ )
 
 -- | HTTP Field Name (Header name)
 --
@@ -27,10 +50,6 @@ import Network.HTTP.LowLevel (copyAddrToByteArray, indexWord8Array, isBadChar, n
 -- The 'HeaderName' also contains a bitmapping of which
 -- bytes were originally upper-case, but is commonly only used
 -- in HTTP\/1 when showing\/encoding the header name.
---
--- For efficiency, the 'HeaderName' can also hold on to
--- the original 'B.ByteString' from which it was parsed.
--- (/if it was parsed from a 'B.ByteString', of course/)
 data HeaderName
     = HeaderName !ByteArray !Bitmap
     deriving (Eq, Show)
@@ -94,6 +113,9 @@ w64s =
 -- [HTTP Field Names](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.6.2)
 -- only allow visible characters that are _not_ delimiters. (though the
 -- convention is to only use alpha-numeric characters and the minus character)
+--
+-- Only used in testing, since the parse functions should ensure any created
+-- 'HeaderName' has no bad bytes.
 isValidHeaderName :: HeaderName -> Bool
 isValidHeaderName (HeaderName arr _) =
     case baLen of
@@ -129,3 +151,65 @@ unsafePackLiteral addr w64 =
         copyAddrToByteArray addr mba size
         unsafeFreezeByteArray mba
 {-# INLINE unsafePackLiteral #-}
+
+-- | ONLY to be used as function to create constant 'HeaderName's.
+-- Should NEVER be exposed!
+--
+-- RULES ensure that the constant does not go through 'String',
+-- but that the literal 'Addr#' gets used as efficiently as possible.
+unsafeMkHeaderName :: String -> Word64 -> HeaderName
+unsafeMkHeaderName s w64 =
+    case parseHeaderNameFromString s of
+        Right (HeaderName hn _) -> HeaderName hn $ OneWord w64
+        Left _ -> error $ "http-types: failed to parse literal header name: " <> s
+{-# INLINE [0] unsafeMkHeaderName #-}
+
+{-# RULES
+"HeaderName unsafeMkHeaderName/packAddress" forall s w64.
+    unsafeMkHeaderName (unpackCString# s) (W64# w64) =
+        unsafePackLiteral s w64
+    #-}
+
+-- We keep 'parseHeaderNameFromString' here to avoid cyclic module dependencies.
+-- As it is used in 'unsafeMkHeaderName' when the RULE doesn't get triggered.
+
+-- | Creates a 'HeaderName' from the given 'String', while checking
+-- for any invalid characters. A zero-length argument will result in
+-- @Left 'EmptyHeaderName'@.
+parseHeaderNameFromString :: String -> Either (HeaderNameException String) HeaderName
+parseHeaderNameFromString s =
+    case find isBadChar' s of
+        Just c -> Left (InvalidFieldNameByte s c)
+        Nothing -> runST $ do
+            mba <- newByteArray len
+            mkBitmapRef <- newSTRef (id :: Bitmap -> Bitmap)
+            go mkBitmapRef mba
+  where
+    isBadChar' c = c > '\xFF' || isBadChar (c2w c)
+    len = length s
+    !(W64# zero#) = 0
+    !(I# finalShift#) = finalShift len
+    go mkBitmapRef mba = loop zero# 0# s
+      where
+        loop _ _ [] = pure (Left EmptyHeaderName)
+        loop bitmap# ix# (c : cs) = do
+            writeWord8Array mba ix# convertedChar#
+            if I# nextIx# == len
+                then do
+                    ba <- unsafeFreezeByteArray mba
+                    mkBitmap <- readSTRef mkBitmapRef
+                    let finalBitmap = mkBitmap (OneWord (W64# (newBitmap# `uncheckedShiftL64#` finalShift#)))
+                    pure $ Right (HeaderName ba finalBitmap)
+                else do
+                    W64# nextBitmap# <- updateRef newBitmap#
+                    loop nextBitmap# nextIx# cs
+          where
+            charInt = ord c
+            !(W8# originalChar#) = fromIntegral charInt
+            convertedChar# = indexWord8OffRawAddr strictIndex (fromIntegral (W8# originalChar#))
+            newBitmap# = adjustBitmap originalChar# convertedChar# bitmap#
+            nextIx# = ix# +# 1#
+            updateRef w64
+                | isMod64 (I# nextIx#) =
+                    0 <$ modifySTRef mkBitmapRef (. MoreWords (W64# w64))
+                | otherwise = pure (W64# (w64 `uncheckedShiftL64#` 1#))
