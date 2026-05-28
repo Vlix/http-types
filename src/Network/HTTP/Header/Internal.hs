@@ -2,17 +2,21 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE UnboxedTuples #-}
 
 module Network.HTTP.Header.Internal where
 
 import Control.Exception (Exception)
+import Control.Monad.ST (runST)
 import Data.Array.Byte (ByteArray (..))
 import Data.Bits (unsafeShiftR, (.&.), (.|.))
 import Data.Char (chr)
 import Data.List (intercalate)
 import Data.Typeable (Typeable)
 import Data.Word (Word64)
-import Network.HTTP.LowLevel (indexWord8Array, isBadChar, sizeOfByteArray)
+import GHC.Exts (Addr#, Int (..), Word64#, cstringLength#)
+import GHC.Word (Word64 (..))
+import Network.HTTP.LowLevel (copyAddrToByteArray, indexWord8Array, isBadChar, newByteArray, sizeOfByteArray, unsafeFreezeByteArray)
 
 -- | HTTP Field Name (Header name)
 --
@@ -126,3 +130,17 @@ data HeaderNameException s
     deriving (Eq, Show)
 
 instance (Show s, Typeable s) => Exception (HeaderNameException s)
+
+-- | Used to make constant 'HeaderName's
+--
+-- (INLINE pragma helps in making the literal size a strict machine word)
+unsafePackLiteral :: Addr# -> Word64# -> HeaderName
+unsafePackLiteral addr w64 =
+    HeaderName ba (OneWord (W64# w64))
+  where
+    size = cstringLength# addr
+    ba = runST $ do
+        mba <- newByteArray (I# size)
+        copyAddrToByteArray addr mba size
+        unsafeFreezeByteArray mba
+{-# INLINE unsafePackLiteral #-}

@@ -14,6 +14,7 @@ import GHC.Exts (
     Ptr (..),
     Word64#,
     Word8#,
+    copyAddrToByteArray#,
     copyByteArrayToAddr#,
     eqWord8#,
     indexWord8Array#,
@@ -98,6 +99,14 @@ copyByteArrayToAddr (ByteArray ba) (Ptr ptr) =
             s2 -> (# s2, () #)
   where
     len = sizeofByteArray# ba
+
+-- | Copy from an 'Addr#' into a 'MutableByteArray'
+--
+-- @src dst offset length@
+copyAddrToByteArray :: Addr# -> MutableByteArray s -> Int# -> ST s ()
+copyAddrToByteArray addr (MutableByteArray mba) len = ST $ \s ->
+    case copyAddrToByteArray# addr mba 0# len s of
+        s2 -> (# s2, () #)
 
 -- | Is the byte a legal 'HeaderName' byte.
 isBadChar :: Word8 -> Bool

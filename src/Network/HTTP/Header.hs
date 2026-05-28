@@ -83,6 +83,7 @@ import GHC.Exts (
     indexWord8Array#,
     indexWord8OffAddr#,
     uncheckedShiftL64#,
+    unpackCString#,
     word2Int#,
     (+#),
  )
@@ -94,6 +95,7 @@ import Network.HTTP.Header.Internal (
     HeaderNameException (..),
     bitmapIsZero,
     bitmapToList,
+    unsafePackLiteral,
  )
 import Network.HTTP.LowLevel (
     adjustBitmap,
@@ -340,25 +342,37 @@ arrayFromText (Text (A.ByteArray arr) _ _) = arr
 ----------------------------- HEADERS FROM HERE ON -----------------------------
 
 hAccept :: HeaderName
-hAccept = unsafeParseHeaderName "Accept"
-{-# NOINLINE hAccept #-}
+hAccept = unsafeMkHeaderName "accept" 0x8000000000000000
 
 hAcceptCharset :: HeaderName
-hAcceptCharset = unsafeParseHeaderName "Accept-Charset"
-{-# NOINLINE hAcceptCharset #-}
+hAcceptCharset = unsafeMkHeaderName "accept-charset" 0x8100000000000000
 
 hAcceptEncoding :: HeaderName
-hAcceptEncoding = unsafeParseHeaderName "Accept-Encoding"
-{-# NOINLINE hAcceptEncoding #-}
+hAcceptEncoding = unsafeMkHeaderName "accept-encoding" 0x8100000000000000
 
 hAcceptLanguage :: HeaderName
-hAcceptLanguage = unsafeParseHeaderName "Accept-Language"
-{-# NOINLINE hAcceptLanguage #-}
+hAcceptLanguage = unsafeMkHeaderName "accept-language" 0x8100000000000000
 
 hAcceptRanges :: HeaderName
-hAcceptRanges = unsafeParseHeaderName "Accept-Ranges"
-{-# NOINLINE hAcceptRanges #-}
+hAcceptRanges = unsafeMkHeaderName "accept-ranges" 0x8100000000000000
 
 hAge :: HeaderName
-hAge = unsafeParseHeaderName "Age"
-{-# NOINLINE hAge #-}
+hAge = unsafeMkHeaderName "age" 0x8000000000000000
+
+-- | ONLY to be used as function to create constant 'HeaderName's.
+-- Should NEVER be exposed!
+--
+-- RULES ensure that the constant does not go through 'String',
+-- but that the literal 'Addr#' gets used as efficiently as possible.
+unsafeMkHeaderName :: String -> Word64 -> HeaderName
+unsafeMkHeaderName s w64 =
+    case parseHeaderNameFromString s of
+        Right (HeaderName hn _) -> HeaderName hn $ OneWord w64
+        Left _ -> error $ "http-types: failed to parse literal header name: " <> s
+{-# INLINE [0] unsafeMkHeaderName #-}
+
+{-# RULES
+"HeaderName unsafeMkHeaderName/packAddress" forall s w64.
+    unsafeMkHeaderName (unpackCString# s) (W64# w64) =
+        unsafePackLiteral s w64
+    #-}
