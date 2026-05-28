@@ -41,6 +41,7 @@ Library
                        Network.HTTP.Types.URI
                        Network.HTTP.Types.Version
   Other-modules:       Network.HTTP.LowLevel
+                       Network.HTTP.Header.Constants
                        Network.HTTP.Header.Internal
   GHC-Options:         -Wall
   Build-depends:       base >= 4.17 && < 5,
