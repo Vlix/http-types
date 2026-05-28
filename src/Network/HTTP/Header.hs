@@ -120,7 +120,7 @@ import Network.HTTP.LowLevel (
 -- | Creates a 'HeaderName' from the given 'ByteString'.
 parseHeaderName :: ByteString -> Either (HeaderNameException ByteString) HeaderName
 parseHeaderName hdr
-    | size <= 0 = Left EmptyHeader
+    | size <= 0 = Left EmptyHeaderName
     | otherwise =
         unsafeDupablePerformIO $ try (toHeaderNameStrict hdr)
   where
@@ -133,7 +133,7 @@ parseHeaderName hdr
 -- Creates a 'HeaderName' from the given 'ByteString'.
 unsafeParseHeaderName :: ByteString -> HeaderName
 unsafeParseHeaderName hdr
-    | size <= 0 = throw (EmptyHeader :: HeaderNameException String)
+    | size <= 0 = throw (EmptyHeaderName :: HeaderNameException String)
     | otherwise =
         unsafeDupablePerformIO $ toHeaderNameStrict hdr
   where
@@ -296,7 +296,7 @@ parseHeaderNameFromText :: Text -> Either (HeaderNameException Text) HeaderName
 parseHeaderNameFromText = encodeHeaderName . encodeUtf8
 #else
 parseHeaderNameFromText txt
-    | len <= 0 = Left EmptyHeader
+    | len <= 0 = Left EmptyHeaderName
     | otherwise = runST $ do
         mba <- newByteArray len
         mkBitmapRef <- newSTRef (id :: Bitmap -> Bitmap)

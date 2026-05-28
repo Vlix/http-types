@@ -111,7 +111,7 @@ data HeaderNameException s
     = -- | The 'Char' is the first encountered invalid character\/byte
       InvalidFieldNameByte s Char
     | -- | The input was empty
-      EmptyHeader
+      EmptyHeaderName
     deriving (Eq, Show)
 
 instance (Show s, Typeable s) => Exception (HeaderNameException s)
