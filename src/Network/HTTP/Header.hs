@@ -48,6 +48,11 @@ module Network.HTTP.Header (
     headerNameToString,
     headerNameToStringLower,
 
+    -- *** Low level encoding
+
+    -- | These functions write straight to a pointer in memory.
+    encodeHeaderNameToPtr,
+
     -- ** Common Header Names
     hAccept,
     hAcceptCharset,
@@ -178,10 +183,14 @@ toHeaderNameStrict bs@(BS fptr size) =
 -- the original 'ByteString' that was used to create it, or it creates a
 -- 'ByteString' from the internal 'ByteArray' + casing bitmap.
 encodeHeaderName :: HeaderName -> ByteString
-encodeHeaderName (HeaderName arr bitmap) =
-    unsafeCreate (sizeOfByteArray arr) $ \ptr -> do
-        stToIO $ copyByteArrayToAddr arr ptr
-        go bitmap ptr
+encodeHeaderName hn@(HeaderName arr _) =
+    unsafeCreate (sizeOfByteArray arr) $ encodeHeaderNameToPtr hn
+
+-- | Like 'encodeHeaderName', but writes to a bare 'Ptr' 'Word8'.
+encodeHeaderNameToPtr :: HeaderName -> Ptr Word8 -> IO ()
+encodeHeaderNameToPtr (HeaderName arr bitmap) startPtr = do
+    stToIO $ copyByteArrayToAddr arr startPtr
+    go bitmap startPtr
   where
     go (OneWord w64) ptr = oneWord w64 ptr
     go (MoreWords w64 more) ptr = do

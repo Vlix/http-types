@@ -35,21 +35,6 @@ data HeaderName
     = HeaderName !ByteArray !Bitmap
     deriving (Eq, Show)
 
--- | Access the inner 'ByteArray' of the 'HeaderName'
-unsafeGetByteArray :: HeaderName -> ByteArray
-unsafeGetByteArray (HeaderName ba _) = ba
-{-# INLINE unsafeGetByteArray #-}
-
--- | Access the inner 'ByteString' of the 'HeaderName'
--- unsafeGetByteString :: HeaderName -> Maybe B.ByteString
--- unsafeGetByteString (HeaderName mbs _ _) = mbs
--- {-# INLINE unsafeGetByteString #-}
-
--- | Access the inner 'ByteString' of the 'HeaderName'
-unsafeGetBitmap :: HeaderName -> Bitmap
-unsafeGetBitmap (HeaderName _ bm) = bm
-{-# INLINE unsafeGetBitmap #-}
-
 -- | Bits from "left-to-right" that show which bytes were
 -- originally upper-case.
 --
