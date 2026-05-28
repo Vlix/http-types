@@ -101,13 +101,13 @@ import Network.HTTP.LowLevel (
     adjustBitmap,
     copyByteArrayToAddr,
     finalShift,
-    foldByteArrayR,
     indexWord8OffRawAddr,
     isBadChar,
     isMod64,
     newByteArray,
     sizeOfByteArray,
     strictIndex,
+    unsafeByteArrayToString,
     unsafeFreezeByteArray,
     writeWord8Array,
  )
@@ -257,35 +257,31 @@ parseHeaderNameFromString s =
 
 -- | Turn the 'HeaderName' into a case-sensitive 'String'.
 headerNameToString :: HeaderName -> String
-headerNameToString (HeaderName arr bm)
-    | bitmapIsZero bm = lowerCastList
-    | otherwise =
-        zipWith toChar lowerCastList $
-            concatMap word64ToBoolList (bitmapToList bm)
+headerNameToString hn@(HeaderName _ bm)
+    | bitmapIsZero bm = lowerCaseList
+    | otherwise = go (0 :: Int) (bitmapToList bm) lowerCaseList
   where
-    lowerCastList = arrayToStringLower arr
-    toChar c b = if b then toUpper c else c
-    word64ToBoolList =
-        loop 64 []
+    firstBit = 0x8000_0000_0000_0000
+    lowerCaseList = headerNameToStringLower hn
+    go _ [] rest = rest
+    go _ _ [] = []
+    go ix (w64 : bmRest) s@(c : cs)
+        | ix == 64 = go 0 bmRest s
+        | otherwise = c' : go (ix + 1) (newW64 : bmRest) cs
       where
-        loop :: Int -> [Bool] -> Word64 -> [Bool]
-        loop 0 acc _ = acc
-        loop n acc w64 =
-            let b = w64 .&. 1 == 1
-             in loop (n - 1) (b : acc) (w64 `unsafeShiftR` 1)
+        c' = if w64 .&. firstBit == 0 then c else toUpper c
+        newW64 = w64 `unsafeShiftL` 1
 
 -- | Turn the 'HeaderName' into a lower-case 'String'
 --
 -- > let hn = unsafeParseHeaderName "Content-Type"
 -- > headerNameToStringLower hn == "content-type"
 headerNameToStringLower :: HeaderName -> String
-headerNameToStringLower (HeaderName arr _) = arrayToStringLower arr
+headerNameToStringLower (HeaderName arr _) = unsafeByteArrayToString arr
 {-# INLINE headerNameToStringLower #-}
 
-arrayToStringLower :: ByteArray -> [Char]
-arrayToStringLower = foldByteArrayR ((:) . w2c) []
-{-# INLINE arrayToStringLower #-}
-
+-- | Creates a 'HeaderName' from the given 'Text', while checking
+-- for any invalid characters.
 parseHeaderNameFromText :: Text -> Either (HeaderNameException Text) HeaderName
 #if !MIN_VERSION_text(1,2,0)
 parseHeaderNameFromText = encodeHeaderName . encodeUtf8
