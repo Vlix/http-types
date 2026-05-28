@@ -62,7 +62,7 @@ import Control.Monad (when)
 import Control.Monad.ST (runST, stToIO)
 import Data.Array.Byte (ByteArray (..))
 import qualified Data.ByteString as B (length)
-import Data.ByteString.Internal (ByteString, c2w, unsafeCreate, w2c)
+import Data.ByteString.Internal (ByteString (BS), c2w, unsafeCreate, w2c)
 import Data.Char (ord, toUpper)
 import Data.List (find)
 import Data.STRef (modifySTRef, newSTRef, readSTRef)
@@ -74,13 +74,14 @@ import qualified Data.Text.Array as A (Array (..))
 #endif
 import Data.Text.Internal (Text (..))
 import Data.Text.Unsafe (lengthWord8)
-import Foreign (Bits (..), Storable (..), plusPtr)
+import Foreign (Bits (..), Storable (..), plusPtr, withForeignPtr)
 import GHC.Exts (
     ByteArray#,
     Int (..),
     Ptr (..),
     clz64#,
     indexWord8Array#,
+    indexWord8OffAddr#,
     uncheckedShiftL64#,
     word2Int#,
     (+#),
@@ -105,9 +106,7 @@ import Network.HTTP.LowLevel (
     newByteArray,
     sizeOfByteArray,
     strictIndex,
-    toHeaderNameHelper,
     unsafeFreezeByteArray,
-    withNewByteArray,
     writeWord8Array,
  )
 
@@ -119,7 +118,6 @@ parseHeaderName hdr
         unsafeDupablePerformIO $ try (toHeaderNameStrict hdr)
   where
     size = B.length hdr
-{-# INLINE parseHeaderName #-}
 
 -- | __Will throw an 'InvalidFieldNameByte' exception if the 'ByteString'__
 -- __contains any bytes not defined in__
@@ -133,16 +131,16 @@ unsafeParseHeaderName hdr
         unsafeDupablePerformIO $ toHeaderNameStrict hdr
   where
     size = B.length hdr
-{-# INLINE unsafeParseHeaderName #-}
 
 toHeaderNameStrict :: ByteString -> IO HeaderName
-toHeaderNameStrict bs =
-    withNewByteArray bs $ \ptr mba -> do
-        mkBitmapRef <- newSTRef (id :: Bitmap -> Bitmap)
-        go mkBitmapRef ptr mba
+toHeaderNameStrict bs@(BS fptr size) =
+    withForeignPtr fptr $ \ptr ->
+        stToIO $ do
+            mba <- newByteArray size
+            mkBitmapRef <- newSTRef (id :: Bitmap -> Bitmap)
+            go mkBitmapRef ptr mba
   where
     !(W64# zero#) = 0
-    size = B.length bs
     !(I# finalShift#) = finalShift size
     go mkBitmapRef (Ptr addr#) mba =
         loop zero# 0#
@@ -164,13 +162,13 @@ toHeaderNameStrict bs =
                     loop nextBitmap# nextIx#
           where
             newBitmap# = adjustBitmap originalChar# convertedChar# bitmap#
-            !(# originalChar#, convertedChar#, nextIx# #) =
-                toHeaderNameHelper strictIndex addr# ix#
+            nextIx# = ix# +# 1#
+            originalChar# = indexWord8OffAddr# addr# ix#
+            convertedChar# = indexWord8OffRawAddr strictIndex (fromIntegral (W8# originalChar#))
             updateRef w64
                 | isMod64 (I# nextIx#) =
                     0 <$ modifySTRef mkBitmapRef (. MoreWords (W64# w64))
                 | otherwise = pure (W64# (w64 `uncheckedShiftL64#` 1#))
-{-# INLINE toHeaderNameStrict #-}
 
 -- | Turns the 'HeaderName' into a case-sensitive 'ByteString'.
 --
@@ -193,7 +191,7 @@ encodeHeaderName (HeaderName arr bitmap) =
     capitalize :: Word8 -> Word8
     capitalize w8 = w8 .&. 0xDF
     oneWord (W64# w64#) ptr = do
-        if I# clz# == 64
+        if I# clz# >= 64
             then pure ()
             else do
                 let newPtr = ptr `plusPtr` I# clz#

@@ -31,13 +31,6 @@ data HeaderName
     = HeaderName !ByteArray !Bitmap
     deriving (Eq, Show)
 
--- FIXME: Hanging on to the 'ByteString' makes lookups and other
--- non-encoding actions a LOT slower (almost 10x times even)
--- So add some benchmarks for how intensive creating a 'ByteString'
--- from a 'HeaderName' is, to compare with taking 160ns more for one compare.
--- Keep in mind that encoding will almost always only happen once,
--- so optimizing for that is probably not the way to go.
-
 -- | Access the inner 'ByteArray' of the 'HeaderName'
 unsafeGetByteArray :: HeaderName -> ByteArray
 unsafeGetByteArray (HeaderName ba _) = ba
