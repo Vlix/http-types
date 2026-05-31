@@ -1,6 +1,6 @@
 # Changelog for `http-types`
 
-## 0.12.5 [XXXX-XX-XX]
+## 0.12.5 [2026-05-31]
 
 * Add status `451 Unavailable For Legal Reasons`
 * Add `http30` as a shortcut for `HttpVersion 3 0`
