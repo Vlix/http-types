@@ -101,6 +101,8 @@ module Network.HTTP.Types.Status (
     tooManyRequests429,
     status431,
     requestHeaderFieldsTooLarge431,
+    status451,
+    unavailableForLegalReasons451,
     status500,
     internalServerError500,
     status501,
@@ -137,14 +139,14 @@ import GHC.Generics (Generic)
 --
 -- Note that the 'Show' instance is only for debugging.
 data Status = Status
-    { -- | The 3-digit code of a 'Status'
-      --
-      -- For example: "200" in a @200 OK@ status
-      statusCode :: Int
-    , -- | The textual message of a 'Status'
-      --
-      -- For example: "Not Found" in a @404 Not Found@ status
-      statusMessage :: B.ByteString
+    { statusCode :: Int
+    -- ^ The 3-digit code of a 'Status'
+    --
+    -- For example: "200" in a @200 OK@ status
+    , statusMessage :: B.ByteString
+    -- ^ The textual message of a 'Status'
+    --
+    -- For example: "Not Found" in a @404 Not Found@ status
     }
     deriving
         ( Show
@@ -164,11 +166,11 @@ data Status = Status
 
 -- | A 'Status' is equal to another 'Status' if the status codes are equal.
 instance Eq Status where
-    Status { statusCode = a } == Status { statusCode = b } = a == b
+    Status{statusCode = a} == Status{statusCode = b} = a == b
 
 -- | 'Status'es are ordered according to their status codes only.
 instance Ord Status where
-    compare Status { statusCode = a } Status { statusCode = b } = a `compare` b
+    compare Status{statusCode = a} Status{statusCode = b} = a `compare` b
 
 -- | Be advised, that when using the \"enumFrom*\" family of methods or
 -- ranges in lists, it will generate all possible status codes.
@@ -221,6 +223,7 @@ instance Enum Status where
     toEnum 428 = status428
     toEnum 429 = status429
     toEnum 431 = status431
+    toEnum 451 = status451
     toEnum 500 = status500
     toEnum 501 = status501
     toEnum 502 = status502
@@ -236,6 +239,8 @@ instance Bounded Status where
     maxBound = status511
 
 -- | Create a 'Status' from a status code and message.
+--
+-- @since 0.7.3
 mkStatus :: Int -> B.ByteString -> Status
 mkStatus = Status
 
@@ -645,60 +650,74 @@ unprocessableEntity422 :: Status
 unprocessableEntity422 = status422
 
 -- | Upgrade Required 426
--- (<https://tools.ietf.org/html/rfc7231#section-6.5.15>)
+-- (<https://tools.ietf.org/html/rfc7231#section-6.5.15 RFC 7231>)
 --
 -- @since 0.10
 status426 :: Status
 status426 = mkStatus 426 "Upgrade Required"
 
 -- | Upgrade Required 426
--- (<https://tools.ietf.org/html/rfc7231#section-6.5.15>)
+-- (<https://tools.ietf.org/html/rfc7231#section-6.5.15 RFC 7231>)
 --
 -- @since 0.10
 upgradeRequired426 :: Status
 upgradeRequired426 = status426
 
 -- | Precondition Required 428
--- (<https://tools.ietf.org/html/rfc6585 RFC 6585>)
+-- (<https://tools.ietf.org/html/rfc6585#section-3 RFC 6585>)
 --
 -- @since 0.8.5
 status428 :: Status
 status428 = mkStatus 428 "Precondition Required"
 
 -- | Precondition Required 428
--- (<https://tools.ietf.org/html/rfc6585 RFC 6585>)
+-- (<https://tools.ietf.org/html/rfc6585#section-3 RFC 6585>)
 --
 -- @since 0.8.5
 preconditionRequired428 :: Status
 preconditionRequired428 = status428
 
 -- | Too Many Requests 429
--- (<https://tools.ietf.org/html/rfc6585 RFC 6585>)
+-- (<https://tools.ietf.org/html/rfc6585#section-4 RFC 6585>)
 --
 -- @since 0.8.5
 status429 :: Status
 status429 = mkStatus 429 "Too Many Requests"
 
 -- | Too Many Requests 429
--- (<https://tools.ietf.org/html/rfc6585 RFC 6585>)
+-- (<https://tools.ietf.org/html/rfc6585#section-4 RFC 6585>)
 --
 -- @since 0.8.5
 tooManyRequests429 :: Status
 tooManyRequests429 = status429
 
 -- | Request Header Fields Too Large 431
--- (<https://tools.ietf.org/html/rfc6585 RFC 6585>)
+-- (<https://tools.ietf.org/html/rfc6585#section-5 RFC 6585>)
 --
 -- @since 0.8.5
 status431 :: Status
 status431 = mkStatus 431 "Request Header Fields Too Large"
 
 -- | Request Header Fields Too Large 431
--- (<https://tools.ietf.org/html/rfc6585 RFC 6585>)
+-- (<https://tools.ietf.org/html/rfc6585#section-5 RFC 6585>)
 --
 -- @since 0.8.5
 requestHeaderFieldsTooLarge431 :: Status
 requestHeaderFieldsTooLarge431 = status431
+
+-- | Unavailable For Legal Reasons 451
+-- (<https://tools.ietf.org/html/rfc7725 RFC 7725>)
+--
+-- @since 0.12.5
+status451 :: Status
+status451 = mkStatus 451 "Unavailable For Legal Reasons"
+
+-- | Unavailable For Legal Reasons 451
+-- (<https://tools.ietf.org/html/rfc7725 RFC 7725>)
+--
+-- @since 0.12.5
+unavailableForLegalReasons451 :: Status
+unavailableForLegalReasons451 = status451
 
 -- | Internal Server Error 500
 status500 :: Status
@@ -769,14 +788,14 @@ httpVersionNotSupported505 :: Status
 httpVersionNotSupported505 = status505
 
 -- | Network Authentication Required 511
--- (<https://tools.ietf.org/html/rfc6585 RFC 6585>)
+-- (<https://tools.ietf.org/html/rfc6585#section-6 RFC 6585>)
 --
 -- @since 0.8.5
 status511 :: Status
 status511 = mkStatus 511 "Network Authentication Required"
 
 -- | Network Authentication Required 511
--- (<https://tools.ietf.org/html/rfc6585 RFC 6585>)
+-- (<https://tools.ietf.org/html/rfc6585#section-6 RFC 6585>)
 --
 -- @since 0.8.5
 networkAuthenticationRequired511 :: Status
@@ -788,7 +807,7 @@ networkAuthenticationRequired511 = status511
 --
 -- @since 0.8.0
 statusIsInformational :: Status -> Bool
-statusIsInformational (Status {statusCode=code}) = code >= 100 && code < 200
+statusIsInformational (Status{statusCode = code}) = code >= 100 && code < 200
 
 -- | Successful class
 --
@@ -796,7 +815,7 @@ statusIsInformational (Status {statusCode=code}) = code >= 100 && code < 200
 --
 -- @since 0.8.0
 statusIsSuccessful :: Status -> Bool
-statusIsSuccessful (Status {statusCode=code}) = code >= 200 && code < 300
+statusIsSuccessful (Status{statusCode = code}) = code >= 200 && code < 300
 
 -- | Redirection class
 --
@@ -804,7 +823,7 @@ statusIsSuccessful (Status {statusCode=code}) = code >= 200 && code < 300
 --
 -- @since 0.8.0
 statusIsRedirection :: Status -> Bool
-statusIsRedirection (Status {statusCode=code}) = code >= 300 && code < 400
+statusIsRedirection (Status{statusCode = code}) = code >= 300 && code < 400
 
 -- | Client Error class
 --
@@ -812,7 +831,7 @@ statusIsRedirection (Status {statusCode=code}) = code >= 300 && code < 400
 --
 -- @since 0.8.0
 statusIsClientError :: Status -> Bool
-statusIsClientError (Status {statusCode=code}) = code >= 400 && code < 500
+statusIsClientError (Status{statusCode = code}) = code >= 400 && code < 500
 
 -- | Server Error class
 --
@@ -820,4 +839,4 @@ statusIsClientError (Status {statusCode=code}) = code >= 400 && code < 500
 --
 -- @since 0.8.0
 statusIsServerError :: Status -> Bool
-statusIsServerError (Status {statusCode=code}) = code >= 500 && code < 600
+statusIsServerError (Status{statusCode = code}) = code >= 500 && code < 600

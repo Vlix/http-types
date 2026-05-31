@@ -91,9 +91,6 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Char (ord)
 import Data.List (intersperse)
 import Data.Maybe (fromMaybe)
-#if __GLASGOW_HASKELL__ < 710
-import Data.Monoid
-#endif
 import Data.Text (Text)
 import Data.Text.Encoding (decodeUtf8With, encodeUtf8)
 import Data.Text.Encoding.Error (lenientDecode)
@@ -275,6 +272,12 @@ ord8 :: Char -> Word8
 ord8 = fromIntegral . ord
 
 unreservedQS, unreservedPI :: [Word8]
+-- FIXME: According to RFC 3986, the following are also allowed in query segments:
+-- "!'()*;:@&=+$,/?"
+--
+-- https://www.rfc-editor.org/rfc/rfc3986#section-3.4
+--
+-- Incidentally, this is also the list of unreserved characters for fragments.
 unreservedQS = map ord8 "-_.~"
 -- FIXME: According to RFC 3986, the following are also allowed in path segments:
 -- "!'()*;"
@@ -542,7 +545,7 @@ renderQueryPartialEscape qm =
 -- @since 0.12.1
 renderQueryBuilderPartialEscape :: Bool -> PartialEscapeQuery -> B.Builder
 renderQueryBuilderPartialEscape _ [] = mempty
--- FIXME replace mconcat + map with foldr
+-- FIXME: replace mconcat + map with foldr
 renderQueryBuilderPartialEscape qmark' (p : ps) =
     mconcat $
         go (if qmark' then qmark else mempty) p

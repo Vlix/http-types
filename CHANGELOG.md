@@ -2,13 +2,20 @@
 
 ## 0.12.5 [XXXX-XX-XX]
 
+* Add status `451 Unavailable For Legal Reasons`
+* Add `http30` as a shortcut for `HttpVersion 3 0`
 * Export everything from `Network.HTTP.Types`
 * Added a bunch of regression, unit and property tests for stability.
 * Updated the `README.md`
+* Lowest GHC version supported is now `7.10.3`.
+  Adjusted dependency constraints to reflect this.
+* Removed explicit `Typeable` class derivations since that happens automatically
+  since GHC `7.10`
 
 ## 0.12.4 [2023-11-29]
 
-* Add `Data` and `Generic` instances to `ByteRange`, `StdMethod`, `Status` and `HttpVersion`.
+* Add `Data` and `Generic` instances to `ByteRange`, `StdMethod`, `Status`
+  and `HttpVersion`.
 * Rework of all the documentation, with the addition of `@since` notations.
 
 ## 0.12.3 [2019-02-24]

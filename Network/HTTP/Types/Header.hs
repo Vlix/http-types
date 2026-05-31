@@ -96,9 +96,6 @@ import qualified Data.ByteString.Lazy as BL
 import qualified Data.CaseInsensitive as CI
 import Data.Data (Data)
 import Data.List (intersperse)
-#if __GLASGOW_HASKELL__ < 710
-import Data.Monoid
-#endif
 import GHC.Generics (Generic)
 
 -- | A full HTTP header field with the name and value separated.
@@ -451,7 +448,9 @@ hPrefer = "Prefer"
 hPreferenceApplied :: HeaderName
 hPreferenceApplied = "Preference-Applied"
 
--- | An individual byte range.
+-- | An individual byte range. Used in @Range@ request headers.
+-- This type and its accompanying functions are /NOT/ compatible with the
+-- @Content-Range@ response header.
 --
 -- Negative indices are not allowed!
 --
@@ -554,8 +553,13 @@ parseByteRanges bs1 = do
             (r, bs5) <- range bs4
             ranges (front . (r :)) bs5
 
-    -- FIXME: Use 'stripPrefix' from the 'bytestring' package.
-    -- Might have to update the dependency constraints though.
-    stripPrefixB x y
-        | x `B.isPrefixOf` y = Just (B.drop (B.length x) y)
-        | otherwise = Nothing
+stripPrefixB :: B.ByteString -> B.ByteString -> Maybe B.ByteString
+#if !MIN_VERSION_bytestring(0,10,8)
+-- FIXME: Use 'stripPrefix' from the 'bytestring' package.
+-- Might have to update the dependency constraints though.
+stripPrefixB x y
+    | x `B.isPrefixOf` y = Just (B.drop (B.length x) y)
+    | otherwise = Nothing
+#else
+stripPrefixB = B.stripPrefix
+#endif

@@ -1,11 +1,11 @@
 *~
 .cabal-sandbox
 cabal.sandbox.config
-dist/*
-dist-newstyle/*
+dist/
+dist-newstyle/
 *_flymake.hs
 *.lock
-.stack-work/*
-test/golden/*.actual
+.stack-work/
 test/.golden/**/actual
 *.code-workspace
+*.local

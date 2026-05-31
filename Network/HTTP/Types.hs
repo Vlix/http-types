@@ -31,6 +31,7 @@ module Network.HTTP.Types (
     http10,
     http11,
     http20,
+    http30,
 
     -- * Status
 
@@ -122,6 +123,8 @@ module Network.HTTP.Types (
     tooManyRequests429,
     status431,
     requestHeaderFieldsTooLarge431,
+    status451,
+    unavailableForLegalReasons451,
     status500,
     internalServerError500,
     status501,

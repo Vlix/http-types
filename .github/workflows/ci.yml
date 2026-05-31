@@ -137,7 +137,7 @@ jobs:
         stack test --no-rerun-tests http-types:test:spec ${{ matrix.resolver }}
     - name: Test Docs
       run: |
-        stack test --no-rerun-tests http-types:test:doctests ${{ matrix.resolver }}
+        stack test http-types:test:doctests ${{ matrix.resolver }}
     # # We probably want to add benchmarks at some point, just to make sure
     # # functions don't regress in performance too much?
     # - name: Bench

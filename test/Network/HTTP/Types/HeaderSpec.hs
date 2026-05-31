@@ -103,7 +103,7 @@ headerCheck (hdr, msg) = do
     it (B8.unpack . pad $ original msg) $ hdr `shouldBe` msg
   where
     pad bs =
-        let padding = B8.pack $ replicate (maxMsg - B.length bs) ' '
+        let padding = B8.replicate (maxMsg - B.length bs) ' '
          in bs <> padding
 
 maxMsg :: Int

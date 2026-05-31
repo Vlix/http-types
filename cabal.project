@@ -1,0 +1,5 @@
+packages: ./http-types.cabal
+ignore-project: False
+allow-newer: Cabal-3.14.2.0:containers,
+             Cabal-syntax-3.14.2.0:containers
+jobs: 2
