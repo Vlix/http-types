@@ -6,5 +6,6 @@ main :: IO ()
 main =
     doctest
         [ "-XOverloadedStrings"
-        , "Network/HTTP/Types.hs"
+        , "-isrc"
+        , "src/Network/HTTP/Types.hs"
         ]
