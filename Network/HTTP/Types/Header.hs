@@ -400,7 +400,7 @@ hWWWAuthenticate = "WWW-Authenticate"
 
 -- | [Warning](https://www.rfc-editor.org/rfc/rfc9111.html#name-warning)
 --
--- /This header has been obsoleted in RFC 9110./
+-- /This header has been obsoleted in RFC 9111./
 --
 -- @since 0.9
 hWarning :: HeaderName
