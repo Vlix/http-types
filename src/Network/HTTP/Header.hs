@@ -23,6 +23,7 @@ module Network.HTTP.Header (
     --
     -- @(e.g. the \"Content-Type\" part of "Content-Type: application\/json")@
     HeaderName,
+    headerNameLength,
 
     -- ** Parsing \/ Decoding
 
@@ -110,6 +111,11 @@ module Network.HTTP.Header (
     hVia,
     hWarning,
     hWWWAuthenticate,
+
+    -- * Utility functions
+
+    -- | Here are some functions that you might want to
+    caseInsensitiveEq,
 ) where
 
 import Control.Exception (throw, try)
@@ -117,7 +123,7 @@ import Control.Monad (when)
 import Control.Monad.ST (runST, stToIO)
 import Data.Array.Byte (ByteArray (..))
 import qualified Data.ByteString as B (length)
-import Data.ByteString.Internal (ByteString (BS), unsafeCreate)
+import Data.ByteString.Internal (ByteString (BS), accursedUnutterablePerformIO, unsafeCreate)
 import Data.Char (toUpper)
 import Data.STRef (modifySTRef, newSTRef, readSTRef)
 import Data.Text (Text)
@@ -133,6 +139,7 @@ import GHC.Exts (
     ByteArray#,
     Int (..),
     Ptr (..),
+    Word8#,
     clz64#,
     indexWord8Array#,
     indexWord8OffAddr#,
@@ -153,6 +160,7 @@ import Network.HTTP.Header.Internal (
  )
 import Network.HTTP.LowLevel (
     adjustBitmap,
+    ciIndex,
     copyByteArrayToAddr,
     finalShift,
     indexWord8OffRawAddr,
@@ -354,3 +362,38 @@ arrayFromText (Text (ByteArray arr) _ _) = arr
 arrayFromText :: Text -> ByteArray#
 arrayFromText (Text (A.ByteArray arr) _ _) = arr
 #endif
+
+-- | The amount of bytes in a 'HeaderName'.
+headerNameLength :: HeaderName -> Int
+headerNameLength (HeaderName ba _) = sizeOfByteArray ba
+{-# INLINE headerNameLength #-}
+
+-- | A faster comparison of two 'ByteString's while ignoring case
+-- /in the ASCII range ONLY/.
+--
+-- Useful when comparing header values that aren't actually 'HeaderName's,
+-- but where case sensitivity doesn't matter.
+--
+-- For example, when checking the @Connection@ header value:
+--
+-- >>> "Close" `caseInsensitiveEq` "close"
+-- True
+caseInsensitiveEq :: ByteString -> ByteString -> Bool
+caseInsensitiveEq (BS _ 0) (BS _ 0) = True
+caseInsensitiveEq (BS fptr1 len1) (BS fptr2 len2)
+    | len1 /= len2 = False
+    | otherwise = accursedUnutterablePerformIO $
+        withForeignPtr fptr1 $ \ptr1 ->
+            withForeignPtr fptr2 $ \ptr2 ->
+                loop ptr1 ptr2 0
+  where
+    ixW8 :: Word8 -> Word8#
+    ixW8 w8 = indexWord8OffRawAddr ciIndex (fromIntegral w8)
+    loop p1 p2 ix
+        | ix == len1 = pure True
+        | otherwise = do
+            w1 <- peek p1
+            w2 <- peek p2
+            if W8# (ixW8 w1) == W8# (ixW8 w2)
+                then loop (p1 `plusPtr` 1) (p2 `plusPtr` 1) (ix + 1)
+                else pure False

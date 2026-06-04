@@ -11,6 +11,7 @@ import Control.Monad.ST (runST)
 import Data.Array.Byte (ByteArray (..))
 import Data.Bits (unsafeShiftR, (.&.), (.|.))
 import Data.Char (chr, ord)
+import Data.Hashable (Hashable (..))
 import Data.List (find, intercalate)
 import Data.STRef (modifySTRef, newSTRef, readSTRef)
 import Data.Typeable (Typeable)
@@ -52,7 +53,19 @@ import Network.HTTP.LowLevel (
 -- in HTTP\/1 when showing\/encoding the header name.
 data HeaderName
     = HeaderName !ByteArray !Bitmap
-    deriving (Eq, Show)
+    deriving (Show)
+
+instance Eq HeaderName where
+    HeaderName ba1 _ == HeaderName ba2 _ = ba1 == ba2
+
+instance Ord HeaderName where
+    HeaderName ba1 _ `compare` HeaderName ba2 _=
+        ba1 `compare` ba2
+
+instance Hashable HeaderName where
+    hash (HeaderName a _) = hash a
+    hashWithSalt i (HeaderName a _) = hashWithSalt i a
+
 
 -- | Bits from "left-to-right" that show which bytes were
 -- originally upper-case.
