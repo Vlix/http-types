@@ -523,11 +523,27 @@ lookupHeaders name@(HeaderName _ _ hashBitmap) Headers{..}
     inBack = reverse $ getHeader backHeaders
     getHeader = filter $ (== name) . headerName
 
+-- | If you would rather handle a 'Maybe', instead of the list from 'lookupHeaders',
+-- then use this function.
+--
+-- /N.B. Please keep in mind this basically calls 'lookupHeaders' and then calls/
+-- /\"@'B.intercalate' ", "@\" on the result if there are duplicates of the header/
+-- /you are looking for, regardless of whether the header supports multiple values./
+--
+-- >>> let hdrs = fromList [hContentLength >: "28", hContentLength >: "20"]
+-- >>> lookupHeader hContentLength hdrs
+-- Just "28, 20"
+lookupHeader :: HeaderName -> Headers -> Maybe ByteString
+lookupHeader name hdrs =
+    case lookupHeaders name hdrs of
+        [] -> Nothing
+        vs -> Just (B.intercalate ", " vs)
+
 -- | Removes any occurence of the given t'HeaderName' in the t'Headers'.
 --
 -- This does not recalculate anything, since this action is viewed as uncommon.
 --
--- >>> lookupHeader hAccept (setHeader (hAccept >: "test") emptyHeaders)
+-- >>> lookupHeaders hAccept (setHeader (hAccept >: "test") emptyHeaders)
 -- ["test"]
 --
 -- >>> removeHeader hAccept (setHeader (hAccept >: "test") emptyHeaders) == emptyHeaders

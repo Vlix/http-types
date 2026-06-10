@@ -30,6 +30,14 @@ Source-repository head
   type: git
   location: https://github.com/Vlix/http-types.git
 
+Flag build-hashable
+  description:
+    Only available for GHC 9.4+.
+    Adds a 'hashable' constraint and includes 'Hashable' instances for
+    'HeaderName' and 'Header'.
+  default: False
+  manual: True
+
 Library
   hs-source-dirs:      src
   Exposed-modules:     Network.HTTP.Header
@@ -48,11 +56,14 @@ Library
                        bytestring >= 0.10.6.0 && < 1,
                        array >= 0.5.1.0 && < 0.6,
                        case-insensitive >= 1.2.0.2 && < 1.3,
-                       hashable,
                        text >= 1.2.0.2 && < 3
   Default-language:    Haskell2010
   if impl(ghc < 9.4)
-    build-depends: data-array-byte
+    Build-depends: data-array-byte >= 0.1 && < 0.2
+  else
+    if flag (build-hashable)
+      CPP-options: -DHASHABLE
+      Build-depends: hashable >= 1.4.1.0 && < 2
 
 Test-suite spec
   main-is:             Spec.hs
@@ -87,6 +98,8 @@ Test-suite spec
                        QuickCheck,
                        quickcheck-instances,
                        text
+  if flag (build-hashable) && impl(ghc >= 9.4)
+    build-depends: hashable
 
 Test-Suite doctests
   main-is:             doctests.hs
@@ -110,9 +123,8 @@ Benchmark http-bench
   build-depends:      base,
                       bytestring,
                       case-insensitive,
-                      containers,
                       deepseq,
-                      hashable,
                       text,
-                      tasty-bench,
-                      unordered-containers
+                      tasty-bench
+  if flag (build-hashable) && impl(ghc >= 9.4)
+    build-depends: hashable

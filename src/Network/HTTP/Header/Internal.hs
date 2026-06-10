@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE NumericUnderscores #-}
@@ -12,7 +13,9 @@ import Data.Array.Byte (ByteArray (..))
 import Data.Bits (unsafeShiftL, unsafeShiftR, (.&.), (.|.))
 import Data.ByteString (ByteString)
 import Data.Char (chr, ord)
+#ifdef HASHABLE
 import Data.Hashable (Hashable (..))
+#endif
 import Data.List (find, intercalate)
 import Data.STRef (modifySTRef, newSTRef, readSTRef)
 import Data.Typeable (Typeable)
@@ -64,6 +67,15 @@ data HeaderName
         HashBitmap
     deriving (Show)
 
+-- | Used in debugging to show the insides of a t'HeaderName'
+rawHeaderName :: HeaderName -> String
+rawHeaderName (HeaderName ba bitmap hashBitmap) =
+    "HeaderName " <> show ba <> " " <> show bitmap <> " " <> show hashBitmap
+
+-- FIXME: Change to pretty print for better UX/DX
+-- instance Show HeaderName where
+--     show = headerNameToString
+
 instance Eq HeaderName where
     HeaderName ba1 _ _ == HeaderName ba2 _ _ = ba1 == ba2
 
@@ -71,9 +83,11 @@ instance Ord HeaderName where
     HeaderName ba1 _ _ `compare` HeaderName ba2 _ _ =
         ba1 `compare` ba2
 
+#ifdef HASHABLE
 instance Hashable HeaderName where
-    hash (HeaderName a _) = hash a
-    hashWithSalt i (HeaderName a _) = hashWithSalt i a
+    hash (HeaderName a _ _) = hash a
+    hashWithSalt i (HeaderName a _ _) = hashWithSalt i a
+#endif
 
 -- | The amount of bytes in a t'HeaderName'.
 headerNameLength :: HeaderName -> Int
@@ -267,7 +281,12 @@ data Header
     = Header {-# UNPACK #-} !HeaderName ByteString
     deriving (Eq, Show)
 
--- | Get the field name from the t'Header'
+#ifdef HASHABLE
+instance Hashable Header where
+    hashWithSalt i (Header name val) = (i `hashWithSalt` name) `hashWithSalt` val
+#endif
+
+-- | Get the HTTP field name from the t'Header'
 headerName :: Header -> HeaderName
 headerName (Header name _) = name
 {-# INLINE headerName #-}
