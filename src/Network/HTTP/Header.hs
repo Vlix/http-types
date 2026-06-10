@@ -474,21 +474,12 @@ setHeaderFront hdr@(Header name@(HeaderName _ _ hashBitmap) _) Headers{..}
 -- 'setHeader', which will make sure the provided t'Header' will be the only
 -- one with that t'HeaderName' in the t'Headers'.
 addHeader :: Header -> Headers -> Headers
-addHeader hdr@(Header (HeaderName _ _ hashBitmap) _) Headers{..}
-    | isPresent =
-        Headers
-            { frontHeaders = frontHeaders
-            , backHeaders = hdr : backHeaders
-            , ..
-            }
-    | otherwise =
-        Headers
-            { frontHeaders = frontHeaders
-            , backHeaders = hdr : backHeaders
-            , contentBitmap = contentBitmap `orHashBitmaps` hashBitmap
-            }
-  where
-    isPresent = contentBitmap `matchBitmap` hashBitmap
+addHeader hdr@(Header (HeaderName _ _ hashBitmap) _) Headers{..} =
+    Headers
+        { frontHeaders = frontHeaders
+        , backHeaders = hdr : backHeaders
+        , contentBitmap = contentBitmap `orHashBitmaps` hashBitmap
+        }
 
 -- | Add a t'Header' to the front of the t'Headers' collection, possibly resulting
 -- in a duplicate entry.
@@ -497,39 +488,30 @@ addHeader hdr@(Header (HeaderName _ _ hashBitmap) _) Headers{..}
 -- 'setHeader', which will make sure the provided t'Header' will be the only
 -- one with that t'HeaderName' in the t'Headers'.
 addHeaderFront :: Header -> Headers -> Headers
-addHeaderFront hdr@(Header (HeaderName _ _ hashBitmap) _) Headers{..}
-    | isPresent =
-        Headers
-            { frontHeaders = hdr : frontHeaders
-            , backHeaders = backHeaders
-            , ..
-            }
-    | otherwise =
-        Headers
-            { frontHeaders = hdr : frontHeaders
-            , backHeaders = backHeaders
-            , contentBitmap = contentBitmap `orHashBitmaps` hashBitmap
-            }
-  where
-    isPresent = contentBitmap `matchBitmap` hashBitmap
+addHeaderFront hdr@(Header (HeaderName _ _ hashBitmap) _) Headers{..} =
+    Headers
+        { frontHeaders = hdr : frontHeaders
+        , backHeaders = backHeaders
+        , contentBitmap = contentBitmap `orHashBitmaps` hashBitmap
+        }
 
 -- | Get the values of all the t'Header's in the t'Headers' that correspond to
 -- the given t'HeaderName'.
 --
--- >>> lookupHeader hAccept emptyHeaders
+-- >>> lookupHeaders hAccept emptyHeaders
 -- []
 --
--- >>> lookupHeader hAccept (fromList [hAccept >: "test"])
+-- >>> lookupHeaders hAccept (fromList [hAccept >: "test"])
 -- ["test"]
 --
 -- >>> let doubleAccept = fromList [hAccept >: "one", hAccept >: "two"]
--- >>> lookupHeader hAccept doubleAccept
+-- >>> lookupHeaders hAccept doubleAccept
 -- ["one","two"]
 --
 -- /N.B. will return more than one 'ByteString' if the t'Headers' contain/
 -- /more than one entry of the searched for t'HeaderName'./
-lookupHeader :: HeaderName -> Headers -> [ByteString]
-lookupHeader name@(HeaderName _ _ hashBitmap) Headers{..}
+lookupHeaders :: HeaderName -> Headers -> [ByteString]
+lookupHeaders name@(HeaderName _ _ hashBitmap) Headers{..}
     | isPresent = headerValue <$> allFoundHeaders
     | otherwise = []
   where
