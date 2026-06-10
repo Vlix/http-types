@@ -2,6 +2,8 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE NumericUnderscores #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 -- | A new implementation of "HTTP Headers" (HTTP Fields).
 --
@@ -9,25 +11,56 @@
 -- they do in the older "Network.HTTP.Types.Header" module.
 -- That module forced you to use the "Data.CaseInsensitive" API to create
 -- header names, and to use list functions to go through the
--- 'Network.HTTP.Types.Header.Headers'.
+-- 'Network.HTTP.Types.Header.Headers'. It also left the adherence to the
+-- HTTP RFC to the user, instead of providing guarantees through the API.
+--
+-- Some recommendations:
+--
+--   * 'fromList' is the best way to create t'Headers'.
+--   * use 'setHeader' to set a header.
+--   * only if you /need/ to put a header at the front, use 'setHeaderFront'.
+--     (e.g. @"Host"@ or @"Date"@ headers, since "it is good practice to send
+--     header fields that contain additional control data first, such as Host
+--     on requests and Date on responses, so that implementations can decide
+--     when not to handle a message as early as possible." - RFC 9110)
+--   * only use 'addHeader' (or 'addHeaderFront') if you're fine with
+--     getting duplicates in the t'Headers'. (e.g. the @"Set-Cookie"@ header)
 module Network.HTTP.Header (
-    -- * HeaderMap
-
-    -- HeaderMap,
+    -- * HTTP Headers
+    Headers,
+    allHeaders,
+    emptyHeaders,
     -- RequestHeaders,
     -- ResponseHeaders,
 
-    -- * Header Names (HTTP Field Names)
+    -- ** An HTTP Header
+    Header,
+    toHeader,
+    (>:),
+    headerName,
+    headerValue,
+
+    -- ** HTTP Header functions
+    fromList,
+    setHeader,
+    setHeaderFront,
+    addHeader,
+    addHeaderFront,
+    lookupHeaders,
+    lookupHeader,
+    removeHeader,
+
+    -- * HTTP Header Names (HTTP Field Names)
 
     -- | The part of an HTTP Field before the colon:
     --
-    -- @(e.g. the \"Content-Type\" part of "Content-Type: application\/json")@
+    -- @i.e. the \"Content-Type\" part of "Content-Type: application\/json"@
     HeaderName,
     headerNameLength,
 
     -- ** Parsing \/ Decoding
 
-    -- | Creating 'HeaderName's.
+    -- | Creating t'HeaderName's.
     --
     -- Parsing also checks whether the incoming elements are allowed in
     -- HTTP Field Names
@@ -122,9 +155,10 @@ import Control.Exception (throw, try)
 import Control.Monad (when)
 import Control.Monad.ST (runST, stToIO)
 import Data.Array.Byte (ByteArray (..))
-import qualified Data.ByteString as B (length)
+import qualified Data.ByteString as B (intercalate, length)
 import Data.ByteString.Internal (ByteString (BS), accursedUnutterablePerformIO, unsafeCreate)
 import Data.Char (toUpper)
+
 import Data.STRef (modifySTRef, newSTRef, readSTRef)
 import Data.Text (Text)
 #if !MIN_VERSION_text(1,2,0)
@@ -132,6 +166,7 @@ import Data.Text.Encoding (encodeUtf8)
 #elif !MIN_VERSION_text(2,1,0)
 import qualified Data.Text.Array as A (Array (..))
 #endif
+import qualified Data.List as L
 import Data.Text.Internal (Text (..))
 import Data.Text.Unsafe (lengthWord8)
 import Foreign (Bits (..), Storable (..), plusPtr, withForeignPtr)
@@ -152,11 +187,20 @@ import GHC.Word (Word64 (..), Word8 (..))
 import Network.HTTP.Header.Constants
 import Network.HTTP.Header.Internal (
     Bitmap (..),
+    HashBitmap (..),
+    Header (..),
     HeaderName (..),
     HeaderNameException (..),
+    Headers (..),
+    bitmapFromByteArray,
     bitmapIsZero,
     bitmapToList,
+    headerName,
+    headerNameLength,
+    headerValue,
     parseHeaderNameFromString,
+    toHeader,
+    (>:),
  )
 import Network.HTTP.LowLevel (
     adjustBitmap,
@@ -174,9 +218,15 @@ import Network.HTTP.LowLevel (
     writeWord8Array,
  )
 
--- | Tries to create a 'HeaderName' from the given 'ByteString', while checking
+-- $setup
+-- >>> :set -XOverloadedStrings
+
+-- | Tries to create a t'HeaderName' from the given 'ByteString', while checking
 -- for any invalid characters. A zero-length argument will result in
 -- @Left 'EmptyHeaderName'@.
+--
+-- >>> parseHeaderName "Content-Type"
+-- Right (HeaderName [0x63, 0x6f, 0x6e, 0x74, 0x65, 0x6e, 0x74, 0x2d, 0x74, 0x79, 0x70, 0x65] 8080000000000000)
 parseHeaderName :: ByteString -> Either (HeaderNameException ByteString) HeaderName
 parseHeaderName hdr
     | size <= 0 = Left EmptyHeaderName
@@ -190,7 +240,10 @@ parseHeaderName hdr
 -- [RFC 9110](https://www.rfc-editor.org/rfc/rfc9110.html#section-5.6.2),
 -- __or an 'EmptyHeaderName' if the provided 'ByteString' is empty.__
 --
--- Creates a 'HeaderName' from the given 'ByteString'.
+-- Creates a t'HeaderName' from the given 'ByteString'.
+--
+-- >>> unsafeParseHeaderName "Content-Type"
+-- HeaderName [0x63, 0x6f, 0x6e, 0x74, 0x65, 0x6e, 0x74, 0x2d, 0x74, 0x79, 0x70, 0x65] 8080000000000000
 unsafeParseHeaderName :: ByteString -> HeaderName
 unsafeParseHeaderName hdr
     | size <= 0 = throw (EmptyHeaderName :: HeaderNameException String)
@@ -238,16 +291,19 @@ toHeaderNameStrict bs@(BS fptr size) =
                     0 <$ modifySTRef mkBitmapRef (. MoreWords (W64# w64))
                 | otherwise = pure (W64# (w64 `uncheckedShiftL64#` 1#))
 
--- | Turns the 'HeaderName' into a case-sensitive 'ByteString'.
+-- | Turns the t'HeaderName' into a case-sensitive 'ByteString'.
 --
--- Depending on how the 'HeaderName' is constructed, this might only return
+-- Depending on how the t'HeaderName' is constructed, this might only return
 -- the original 'ByteString' that was used to create it, or it creates a
--- 'ByteString' from the internal 'ByteArray' + casing bitmap.
+-- 'ByteString' from the internal t'ByteArray' + casing bitmap.
+--
+-- >>> encodeHeaderName (unsafeParseHeaderName "Content-Type")
+-- "Content-Type"
 encodeHeaderName :: HeaderName -> ByteString
 encodeHeaderName hn@(HeaderName arr _ _) =
     unsafeCreate (sizeOfByteArray arr) $ encodeHeaderNameToPtr hn
 
--- | Like 'encodeHeaderName', but writes to a bare 'Ptr' 'Word8'.
+-- | Like 'encodeHeaderName', but writes to a bare t'Ptr' 'Word8'.
 encodeHeaderNameToPtr :: HeaderName -> Ptr Word8 -> IO ()
 encodeHeaderNameToPtr (HeaderName arr bitmap _) startPtr = do
     stToIO $ copyByteArrayToAddr arr startPtr
@@ -274,16 +330,19 @@ encodeHeaderNameToPtr (HeaderName arr bitmap _) startPtr = do
       where
         clz# = word2Int# (clz64# w64#)
 
--- | Encode the 'HeaderName' to a lower-case 'ByteString'.
+-- | Encode the t'HeaderName' to a lower-case 'ByteString'.
 --
--- > let hn = unsafeParseHeaderName "Content-Type"
--- > encodeHeaderNameLower hn == "content-type"
+-- >>> encodeHeaderNameLower (unsafeParseHeaderName "Content-Type")
+-- "content-type"
 encodeHeaderNameLower :: HeaderName -> ByteString
 encodeHeaderNameLower (HeaderName ba _ _) =
     unsafeCreate (sizeOfByteArray ba) $
         stToIO . copyByteArrayToAddr ba
 
--- | Turn the 'HeaderName' into a case-sensitive 'String'.
+-- | Turn the t'HeaderName' into a case-sensitive 'String'.
+--
+-- >>> headerNameToString (unsafeParseHeaderName "Content-Type")
+-- "Content-Type"
 headerNameToString :: HeaderName -> String
 headerNameToString hn@(HeaderName _ bm _)
     | bitmapIsZero bm = lowerCaseList
@@ -300,17 +359,20 @@ headerNameToString hn@(HeaderName _ bm _)
         c' = if w64 .&. firstBit == 0 then c else toUpper c
         newW64 = w64 `unsafeShiftL` 1
 
--- | Turn the 'HeaderName' into a lower-case 'String'
+-- | Turn the t'HeaderName' into a lower-case 'String'
 --
--- > let hn = unsafeParseHeaderName "Content-Type"
--- > headerNameToStringLower hn == "content-type"
+-- >>> headerNameToStringLower (unsafeParseHeaderName "Content-Type")
+-- "content-type"
 headerNameToStringLower :: HeaderName -> String
 headerNameToStringLower (HeaderName arr _ _) = unsafeByteArrayToString arr
 {-# INLINE headerNameToStringLower #-}
 
--- | Tries to create a 'HeaderName' from the given 'Text', while checking
+-- | Tries to create a t'HeaderName' from the given t'Text', while checking
 -- for any invalid characters. A zero-length argument will result in
 -- @Left 'EmptyHeaderName'@.
+--
+-- >>> parseHeaderNameFromText "Content-Type"
+-- Right (HeaderName [0x63, 0x6f, 0x6e, 0x74, 0x65, 0x6e, 0x74, 0x2d, 0x74, 0x79, 0x70, 0x65] 8080000000000000)
 parseHeaderNameFromText :: Text -> Either (HeaderNameException Text) HeaderName
 #if !MIN_VERSION_text(1,2,0)
 parseHeaderNameFromText = encodeHeaderName . encodeUtf8
@@ -369,7 +431,7 @@ arrayFromText (Text (A.ByteArray arr) _ _) = arr
 -- | A faster comparison of two 'ByteString's while ignoring case
 -- /in the ASCII range ONLY/.
 --
--- Useful when comparing header values that aren't actually 'HeaderName's,
+-- Useful when comparing header values that aren't actually t'HeaderName's,
 -- but where case sensitivity doesn't matter.
 --
 -- For example, when checking the @Connection@ header value:

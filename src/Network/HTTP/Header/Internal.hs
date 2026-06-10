@@ -49,11 +49,11 @@ import Network.HTTP.LowLevel (
 
 -- | HTTP Field Name (Header name)
 --
--- Technically, this is implemented as a raw 'ByteArray'.
--- The 'ByteArray' is always lower-case and only contains
+-- Technically, this is implemented as a raw t'ByteArray'.
+-- The t'ByteArray' is always lower-case and only contains
 -- valid bytes for an HTTP Field Name.
 --
--- The 'HeaderName' also contains a bitmapping of which
+-- The t'HeaderName' also contains a bitmapping of which
 -- bytes were originally upper-case, but is commonly only used
 -- in HTTP\/1 when showing\/encoding the header name.
 data HeaderName
@@ -155,7 +155,7 @@ w64s =
 -- convention is to only use alpha-numeric characters and the minus character)
 --
 -- Only used in testing, since the parse functions should ensure any created
--- 'HeaderName' has no bad bytes.
+-- t'HeaderName' has no bad bytes.
 isValidHeaderName :: HeaderName -> Bool
 isValidHeaderName (HeaderName arr _ _) =
     case baLen of
@@ -168,7 +168,7 @@ isValidHeaderName (HeaderName arr _ _) =
         | isBadChar (indexWord8Array arr ix) = False
         | otherwise = loop (ix + 1)
 
--- | Any failure states of parsing a 'HeaderName'.
+-- | Any failure states of parsing a t'HeaderName'.
 data HeaderNameException s
     = -- | The 'Char' is the first encountered invalid character\/byte
       InvalidFieldNameByte s Char
@@ -178,7 +178,7 @@ data HeaderNameException s
 
 instance (Show s, Typeable s) => Exception (HeaderNameException s)
 
--- | Used to make constant 'HeaderName's
+-- | Used to make constant t'HeaderName's
 --
 -- (INLINE pragma helps in making the literal size a strict machine word)
 unsafePackLiteral :: Addr# -> Word64# -> HeaderName
@@ -192,7 +192,7 @@ unsafePackLiteral addr w64 =
         unsafeFreezeByteArray mba
 {-# INLINE unsafePackLiteral #-}
 
--- | ONLY to be used as function to create constant 'HeaderName's.
+-- | ONLY to be used as function to create constant t'HeaderName's.
 -- Should NEVER be exposed!
 --
 -- RULES ensure that the constant does not go through 'String',
@@ -214,7 +214,7 @@ unsafeMkHeaderName s w64 =
 -- We keep 'parseHeaderNameFromString' here to avoid cyclic module dependencies.
 -- As it is used in 'unsafeMkHeaderName' when the RULE doesn't get triggered.
 
--- | Creates a 'HeaderName' from the given 'String', while checking
+-- | Creates a t'HeaderName' from the given 'String', while checking
 -- for any invalid characters. A zero-length argument will result in
 -- @Left 'EmptyHeaderName'@.
 parseHeaderNameFromString :: String -> Either (HeaderNameException String) HeaderName
@@ -277,6 +277,10 @@ bitmapFromByteArray ba =
     hdrLen = sizeOfByteArray ba
 
 -- | Both a header field name and its value.
+--
+-- @
+-- e.g. both the \"Content-Length\" and \"28\" part of the "Content-Length: 28" header line
+-- @
 data Header
     = Header {-# UNPACK #-} !HeaderName ByteString
     deriving (Eq, Show)
@@ -291,12 +295,12 @@ headerName :: Header -> HeaderName
 headerName (Header name _) = name
 {-# INLINE headerName #-}
 
--- | Get the field value from the t'Header'
+-- | Get the HTTP field value from the t'Header'
 headerValue :: Header -> ByteString
 headerValue (Header _ val) = val
 {-# INLINE headerValue #-}
 
--- | Construct a t'Header'
+-- | Construct an HTTP t'Header'
 toHeader :: HeaderName -> ByteString -> Header
 toHeader = Header
 {-# INLINE toHeader #-}
@@ -306,7 +310,7 @@ toHeader = Header
 (>:) = Header
 {-# INLINE (>:) #-}
 
--- | Collection of headers.
+-- | Collection of HTTP headers.
 --
 -- Faster than @[Header]@ in most cases:
 --

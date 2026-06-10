@@ -39,8 +39,8 @@ import GHC.Word (Word64 (..), Word8 (..))
 -- | Carrier for a raw 'Addr#'
 data RawAddr = RawAddr Addr#
 
--- | A 64-byte mapping of which bytes in the 8-bit range are valid and
--- what to map them to when producing case-insensitive 'ByteArray's.
+-- | A 256-byte mapping of which bytes in the 8-bit range are valid and
+-- what to map them to when producing case-insensitive t'ByteArray's.
 strictIndex :: RawAddr
 strictIndex =
     RawAddr
@@ -61,7 +61,7 @@ strictIndex =
         \\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\
         \\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"#
 
--- | A 64-byte mapping of all bytes in the 7-bit ASCII range to lower case
+-- | A 256-byte mapping of all bytes in the 7-bit ASCII range to lower case
 -- when possible. _IGNORES EVERYTHING IN THE RANGE OUTSIDE OF ASCII_
 ciIndex :: RawAddr
 ciIndex =
@@ -193,30 +193,30 @@ indexWord8OffRawAddr (RawAddr addr#) (I# i#) =
     indexWord8OffAddr# addr# i#
 {-# INLINE indexWord8OffRawAddr #-}
 
--- | Creating a new 'ByteArray'
+-- | Creating a new t'ByteArray'
 newByteArray :: Int -> ST s (MutableByteArray s)
 newByteArray (I# len) = ST $ \s ->
     case newByteArray# len s of
         (# s2, mba #) -> (# s2, MutableByteArray mba #)
 
--- | Set a byte of a specific index in a 'MutableByteArray'
+-- | Set a byte of a specific index in a t'MutableByteArray'.
 writeWord8Array :: MutableByteArray s -> Int# -> Word8# -> ST s ()
 writeWord8Array (MutableByteArray mba) ix byte = ST $ \s ->
     case writeWord8Array# mba ix byte s of
         s2 -> (# s2, () #)
 
--- | Finish a 'ByteArray'
+-- | Finish a t'ByteArray'.
 unsafeFreezeByteArray :: MutableByteArray s -> ST s ByteArray
 unsafeFreezeByteArray (MutableByteArray mba) = ST $ \s ->
     case unsafeFreezeByteArray# mba s of
         (# s2, ba #) -> (# s2, ByteArray ba #)
 
--- | Amount of bytes in 'ByteArray'
+-- | Amount of bytes in t'ByteArray'.
 sizeOfByteArray :: ByteArray -> Int
 sizeOfByteArray (ByteArray arr) = I# (sizeofByteArray# arr)
 {-# INLINE sizeOfByteArray #-}
 
--- | Copy a 'ByteArray' into a 'Ptr' (e.g. when creating a ByteString)
+-- | Copy a t'ByteArray' into a t'Ptr' (e.g. when creating a ByteString)
 --
 -- @src offset dst length@
 copyByteArrayToAddr :: ByteArray -> Ptr Word8 -> ST s ()
@@ -227,7 +227,7 @@ copyByteArrayToAddr (ByteArray ba) (Ptr ptr) =
   where
     len = sizeofByteArray# ba
 
--- | Copy from an 'Addr#' into a 'MutableByteArray'
+-- | Copy from an 'Addr#' into a t'MutableByteArray'.
 --
 -- @src dst offset length@
 copyAddrToByteArray :: Addr# -> MutableByteArray s -> Int# -> ST s ()
@@ -235,26 +235,27 @@ copyAddrToByteArray addr (MutableByteArray mba) len = ST $ \s ->
     case copyAddrToByteArray# addr mba 0# len s of
         s2 -> (# s2, () #)
 
--- | Is the byte a legal 'HeaderName' byte.
+-- | Is the byte a legal 'Network.HTTP.Header.HeaderName' byte.
 isBadChar :: Word8 -> Bool
 isBadChar char =
     W8# (indexWord8OffRawAddr strictIndex (fromIntegral char)) == 0xFF
 
 -- | Checking if the first 6 bits of an integer are zero.
 --
--- (used to quickly check if we're at the end of a 'Bitmap')
+-- (used to quickly check if we're at the end of a 'Network.HTTP.Header.Internal.Bitmap')
 isMod64 :: Int -> Bool
 isMod64 i = i .&. 0xBF == 0
 {-# INLINE isMod64 #-}
 
--- | 'Bitmap's start at the most significant side of the word,
+-- | 'Network.HTTP.Header.Internal.Bitmap's start at the most significant side of the word,
 -- so this is the amount the final word will have to be shifted
--- given the total size of the 'ByteArray'
+-- given the total size of the t'ByteArray'
 finalShift :: Int -> Int
-finalShift size = 64 - (size .&. 0xBF) -- bitmask of (0011 1111)
+-- 0xBF == bitmask of (0011 1111), basically "modulo 64"
+finalShift size = 64 - (size .&. 0xBF)
 {-# INLINE finalShift #-}
 
--- | Create a 'String' from the 'ByteArray' in a streaming fashion.
+-- | Create a 'String' from the t'ByteArray' in a streaming fashion.
 unsafeByteArrayToString :: ByteArray -> String
 unsafeByteArrayToString ba =
     assert (baLen >= 0) $
