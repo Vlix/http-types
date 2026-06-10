@@ -205,7 +205,8 @@ toHeaderNameStrict bs@(BS fptr size) =
         stToIO $ do
             mba <- newByteArray size
             mkBitmapRef <- newSTRef (id :: Bitmap -> Bitmap)
-            go mkBitmapRef ptr mba
+            (ba, bitmap) <- go mkBitmapRef ptr mba
+            pure (HeaderName ba bitmap (bitmapFromByteArray ba))
   where
     !(W64# zero#) = 0
     !(I# finalShift#) = finalShift size
@@ -223,7 +224,7 @@ toHeaderNameStrict bs@(BS fptr size) =
                     let finalBitmap = newBitmap# `uncheckedShiftL64#` finalShift#
                         !finishedBitmap =
                             mkBitmap $ OneWord (W64# finalBitmap)
-                    pure (HeaderName ba finishedBitmap)
+                    pure (ba, finishedBitmap)
                 else do
                     W64# nextBitmap# <- updateRef newBitmap#
                     loop nextBitmap# nextIx#
@@ -243,12 +244,12 @@ toHeaderNameStrict bs@(BS fptr size) =
 -- the original 'ByteString' that was used to create it, or it creates a
 -- 'ByteString' from the internal 'ByteArray' + casing bitmap.
 encodeHeaderName :: HeaderName -> ByteString
-encodeHeaderName hn@(HeaderName arr _) =
+encodeHeaderName hn@(HeaderName arr _ _) =
     unsafeCreate (sizeOfByteArray arr) $ encodeHeaderNameToPtr hn
 
 -- | Like 'encodeHeaderName', but writes to a bare 'Ptr' 'Word8'.
 encodeHeaderNameToPtr :: HeaderName -> Ptr Word8 -> IO ()
-encodeHeaderNameToPtr (HeaderName arr bitmap) startPtr = do
+encodeHeaderNameToPtr (HeaderName arr bitmap _) startPtr = do
     stToIO $ copyByteArrayToAddr arr startPtr
     go bitmap startPtr
   where
@@ -278,13 +279,13 @@ encodeHeaderNameToPtr (HeaderName arr bitmap) startPtr = do
 -- > let hn = unsafeParseHeaderName "Content-Type"
 -- > encodeHeaderNameLower hn == "content-type"
 encodeHeaderNameLower :: HeaderName -> ByteString
-encodeHeaderNameLower (HeaderName ba _) =
+encodeHeaderNameLower (HeaderName ba _ _) =
     unsafeCreate (sizeOfByteArray ba) $
         stToIO . copyByteArrayToAddr ba
 
 -- | Turn the 'HeaderName' into a case-sensitive 'String'.
 headerNameToString :: HeaderName -> String
-headerNameToString hn@(HeaderName _ bm)
+headerNameToString hn@(HeaderName _ bm _)
     | bitmapIsZero bm = lowerCaseList
     | otherwise = go (0 :: Int) (bitmapToList bm) lowerCaseList
   where
@@ -304,7 +305,7 @@ headerNameToString hn@(HeaderName _ bm)
 -- > let hn = unsafeParseHeaderName "Content-Type"
 -- > headerNameToStringLower hn == "content-type"
 headerNameToStringLower :: HeaderName -> String
-headerNameToStringLower (HeaderName arr _) = unsafeByteArrayToString arr
+headerNameToStringLower (HeaderName arr _ _) = unsafeByteArrayToString arr
 {-# INLINE headerNameToStringLower #-}
 
 -- | Tries to create a 'HeaderName' from the given 'Text', while checking
@@ -316,10 +317,12 @@ parseHeaderNameFromText = encodeHeaderName . encodeUtf8
 #else
 parseHeaderNameFromText txt
     | len <= 0 = Left EmptyHeaderName
-    | otherwise = runST $ do
-        mba <- newByteArray len
-        mkBitmapRef <- newSTRef (id :: Bitmap -> Bitmap)
-        go mkBitmapRef mba
+    | otherwise = do
+        (ba, bitmap) <- runST $ do
+            mba <- newByteArray len
+            mkBitmapRef <- newSTRef (id :: Bitmap -> Bitmap)
+            go mkBitmapRef mba
+        pure (HeaderName ba bitmap (bitmapFromByteArray ba))
   where
     arr = arrayFromText txt
     len = lengthWord8 txt
@@ -338,7 +341,7 @@ parseHeaderNameFromText txt
                         ba <- unsafeFreezeByteArray mba
                         mkBitmap <- readSTRef mkBitmapRef
                         let finalBitmap = mkBitmap (OneWord (W64# (newBitmap# `uncheckedShiftL64#` finalShift#)))
-                        pure $ Right (HeaderName ba finalBitmap)
+                        pure $ Right (ba, finalBitmap)
                     else do
                         (W64# nextBitmap#) <- updateRef newBitmap#
                         loop nextBitmap# nextIx#
@@ -362,11 +365,6 @@ arrayFromText (Text (ByteArray arr) _ _) = arr
 arrayFromText :: Text -> ByteArray#
 arrayFromText (Text (A.ByteArray arr) _ _) = arr
 #endif
-
--- | The amount of bytes in a 'HeaderName'.
-headerNameLength :: HeaderName -> Int
-headerNameLength (HeaderName ba _) = sizeOfByteArray ba
-{-# INLINE headerNameLength #-}
 
 -- | A faster comparison of two 'ByteString's while ignoring case
 -- /in the ASCII range ONLY/.
@@ -397,3 +395,187 @@ caseInsensitiveEq (BS fptr1 len1) (BS fptr2 len2)
             if W8# (ixW8 w1) == W8# (ixW8 w2)
                 then loop (p1 `plusPtr` 1) (p2 `plusPtr` 1) (ix + 1)
                 else pure False
+
+-- | Create a t'Headers' collection from a list of t'Header's.
+fromList :: [Header] -> Headers
+fromList [] = emptyHeaders
+fromList hdrList =
+    Headers
+        { frontHeaders = hdrList
+        , backHeaders = []
+        , contentBitmap = cbm
+        }
+  where
+    cbm =
+        L.foldl' go (HashWords 0 0) hdrList
+      where
+        go allContent (Header (HeaderName _ _ hashBitmap) _) =
+            allContent `orHashBitmaps` hashBitmap -- bitmapFromHeaderName hdrName
+
+matchBitmap :: HashBitmap -> HashBitmap -> Bool
+matchBitmap (HashWords a1 b1) (HashWords a2 b2) =
+    a1 `containedInBits` a2
+        && b1 `containedInBits` b2
+
+containedInBits :: Word64 -> Word64 -> Bool
+containedInBits collection toCheck =
+    (collection .&. toCheck) == toCheck
+
+orHashBitmaps :: HashBitmap -> HashBitmap -> HashBitmap
+orHashBitmaps (HashWords a1 b1) (HashWords a2 b2) =
+    HashWords (a1 .|. a2) (b1 .|. b2)
+
+-- | Set a header at the back of the t'Headers'.
+--
+-- This will remove any already present t'Header's with the given t'HeaderName'.
+setHeader :: Header -> Headers -> Headers
+setHeader hdr@(Header name@(HeaderName _ _ hashBitmap) _) Headers{..}
+    | isPresent =
+        Headers
+            { frontHeaders = removeIt frontHeaders
+            , backHeaders = hdr : removeIt backHeaders
+            , ..
+            }
+    | otherwise =
+        Headers
+            { backHeaders = hdr : backHeaders
+            , contentBitmap = contentBitmap `orHashBitmaps` hashBitmap
+            , ..
+            }
+  where
+    isPresent = contentBitmap `matchBitmap` hashBitmap
+    removeIt = filter $ (/= name) . headerName
+
+-- | Set a header at the front of the t'Headers'.
+--
+-- This will remove any already present t'Header's with the given t'HeaderName'.
+setHeaderFront :: Header -> Headers -> Headers
+setHeaderFront hdr@(Header name@(HeaderName _ _ hashBitmap) _) Headers{..}
+    | isPresent =
+        Headers
+            { frontHeaders = hdr : removeIt frontHeaders
+            , backHeaders = removeIt backHeaders
+            , ..
+            }
+    | otherwise =
+        Headers
+            { frontHeaders = hdr : frontHeaders
+            , contentBitmap = contentBitmap `orHashBitmaps` hashBitmap
+            , ..
+            }
+  where
+    isPresent = contentBitmap `matchBitmap` hashBitmap
+    removeIt = filter $ (/= name) . headerName
+
+-- | Add a t'Header' to the back of the t'Headers' collection, /possibly resulting/
+-- /in a duplicate entry/.
+--
+-- If you only want one header with the given t'HeaderName', you should use
+-- 'setHeader', which will make sure the provided t'Header' will be the only
+-- one with that t'HeaderName' in the t'Headers'.
+addHeader :: Header -> Headers -> Headers
+addHeader hdr@(Header (HeaderName _ _ hashBitmap) _) Headers{..}
+    | isPresent =
+        Headers
+            { frontHeaders = frontHeaders
+            , backHeaders = hdr : backHeaders
+            , ..
+            }
+    | otherwise =
+        Headers
+            { frontHeaders = frontHeaders
+            , backHeaders = hdr : backHeaders
+            , contentBitmap = contentBitmap `orHashBitmaps` hashBitmap
+            }
+  where
+    isPresent = contentBitmap `matchBitmap` hashBitmap
+
+-- | Add a t'Header' to the front of the t'Headers' collection, possibly resulting
+-- in a duplicate entry.
+--
+-- If you only want one header with the given t'HeaderName', you should use
+-- 'setHeader', which will make sure the provided t'Header' will be the only
+-- one with that t'HeaderName' in the t'Headers'.
+addHeaderFront :: Header -> Headers -> Headers
+addHeaderFront hdr@(Header (HeaderName _ _ hashBitmap) _) Headers{..}
+    | isPresent =
+        Headers
+            { frontHeaders = hdr : frontHeaders
+            , backHeaders = backHeaders
+            , ..
+            }
+    | otherwise =
+        Headers
+            { frontHeaders = hdr : frontHeaders
+            , backHeaders = backHeaders
+            , contentBitmap = contentBitmap `orHashBitmaps` hashBitmap
+            }
+  where
+    isPresent = contentBitmap `matchBitmap` hashBitmap
+
+-- | Get the values of all the t'Header's in the t'Headers' that correspond to
+-- the given t'HeaderName'.
+--
+-- >>> lookupHeader hAccept emptyHeaders
+-- []
+--
+-- >>> lookupHeader hAccept (fromList [hAccept >: "test"])
+-- ["test"]
+--
+-- >>> let doubleAccept = fromList [hAccept >: "one", hAccept >: "two"]
+-- >>> lookupHeader hAccept doubleAccept
+-- ["one","two"]
+--
+-- /N.B. will return more than one 'ByteString' if the t'Headers' contain/
+-- /more than one entry of the searched for t'HeaderName'./
+lookupHeader :: HeaderName -> Headers -> [ByteString]
+lookupHeader name@(HeaderName _ _ hashBitmap) Headers{..}
+    | isPresent = headerValue <$> allFoundHeaders
+    | otherwise = []
+  where
+    isPresent = contentBitmap `matchBitmap` hashBitmap
+    allFoundHeaders = inFront <> inBack
+    inFront = getHeader frontHeaders
+    -- we first filter the reversed headers to save us a reverse
+    -- on the entire list.
+    inBack = reverse $ getHeader backHeaders
+    getHeader = filter $ (== name) . headerName
+
+-- | Removes any occurence of the given t'HeaderName' in the t'Headers'.
+--
+-- This does not recalculate anything, since this action is viewed as uncommon.
+--
+-- >>> lookupHeader hAccept (setHeader (hAccept >: "test") emptyHeaders)
+-- ["test"]
+--
+-- >>> removeHeader hAccept (setHeader (hAccept >: "test") emptyHeaders) == emptyHeaders
+-- True
+removeHeader :: HeaderName -> Headers -> Headers
+removeHeader hdrName@(HeaderName _ _ hashBitmap) hdrs@Headers{..}
+    | isPresent =
+        Headers
+            { frontHeaders = removeIt frontHeaders
+            , backHeaders = removeIt backHeaders
+            , ..
+            }
+    | otherwise = hdrs
+  where
+    isPresent = contentBitmap `matchBitmap` hashBitmap
+    removeIt = filter $ (/=) hdrName . headerName
+
+-- | Get all t'Header's in order.
+allHeaders :: Headers -> [Header]
+allHeaders hdrs = frontHeaders hdrs <> reverse (backHeaders hdrs)
+
+-- | An empty collection of headers.
+--
+-- In general, you'd want to use 'fromList' to create t'Headers'; it is more
+-- efficient than starting with 'emptyHeaders' and iteratively adding to it,
+-- but sometimes you can't get around it, so it is provided.
+emptyHeaders :: Headers
+emptyHeaders =
+    Headers
+        { frontHeaders = []
+        , backHeaders = []
+        , contentBitmap = HashWords 0 0
+        }

@@ -83,6 +83,104 @@ ciIndex =
         \\xE0\xE1\xE2\xE3\xE4\xE5\xE6\xE7\xE8\xE9\xEA\xEB\xEC\xED\xEE\xEF\
         \\xF0\xF1\xF2\xF3\xF4\xF5\xF6\xF7\xF8\xF9\xFA\xFB\xFC\xFD\xFE\xFF"#
 
+-- |
+--
+-- This mapping has been optimized to get as little as possible overlap
+-- between characters while fitting all allowed characters into 16 bits.
+-- (i.e. from 0x00 to 0x0F, which is used to set a bit in a bitmap later)
+--
+-- The polled headers were taken from [here](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers>)
+-- and the first four characters of each referenced header was taken and
+-- sampled for occurence.
+--
+-- The results were as follows:
+-- @
+--  01 \'e\': 98
+--  02 \'c\': 94
+--  03 \'-\': 60
+--  04 \'s\': 59
+--  05 \'r\': 51
+--  06 \'t\': 45
+--  07 \'a\': 44
+--  08 \'o\': 40
+--  09 \'n\': 27
+--  10 \'i\': 25
+--  11 \'p\': 23
+--  12 \'x\': 17
+--  13 \'f\': 16
+--  14 \'v\': 12
+--  15 \'w\': 10
+--  16 \'l\': 10
+--     \'u\': 9
+--     \'d\': 8
+--     \'m\': 8
+--     \'g\': 8
+--     \'k\': 4
+--     \'h\': 3
+--     \'y\': 1
+--     \'b\': 1
+--     \'z\': 0
+--     \'q\': 0
+--     \'j\': 0
+--  (all other special chars, none)
+--  (all numbers, none)
+--  -------------------------------
+-- @
+--
+-- And they have been sectioned into
+-- the following groups of 16
+--
+-- @
+--  01 (\'e\',98)
+--  02 (\'c\',94)
+--  03 (\'-\',60)
+--      (and all other special chars)
+--  04 (\'s\',59)
+--  05 (\'r\',51)
+--      - (\'z\',0)
+--  06 (\'t\',45)
+--      - (\'q\',0)
+--  07 (\'a\',44)
+--      - (\'j\',0)
+--  08 (\'o\',40)
+--      - (\'y\',1)
+--  09 (\'n\',27)
+--      - (\'b\',1)
+--  10 (\'i\',25)
+--      - (\'h\',3)
+--  11 (\'p\',23)
+--      - (\'k\',4)
+--  12 (\'x\',17)
+--      (and all numbers)
+--  13 (\'f\',16)
+--      - (\'g\',8)
+--  14 (\'v\',12)
+--      - (\'u\',8)
+--  15 (\'l\',10)
+--      - (\'m\',8)
+--  16 (\'w\',10)
+--      - (\'d\',9)
+-- @
+hashIndex :: RawAddr
+hashIndex =
+    RawAddr
+        "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\
+        \\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\
+        \\xFF\x02\xFF\x02\x02\x02\x02\x02\xFF\xFF\x02\x02\xFF\x02\x02\xFF\
+        \\x0B\x0B\x0B\x0B\x0B\x0B\x0B\x0B\x0B\x0B\xFF\xFF\xFF\xFF\xFF\xFF\
+        \\xFF\x06\x08\x01\x0F\x00\x0C\x0C\x0A\x09\x09\x0A\x0E\x0E\x08\x07\
+        \\x0A\x05\x04\x03\x05\x0D\x0D\x0F\x0B\x07\x04\xFF\xFF\xFF\x02\x02\
+        \\x02\x06\x08\x01\x0F\x00\x0C\x0C\x0A\x09\x09\x0A\x0E\x0E\x08\x07\
+        \\x0A\x05\x04\x03\x05\x0D\x0D\x0F\x0B\x07\x04\xFF\x02\xFF\x02\xFF\
+        \\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\
+        \\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\
+        \\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\
+        \\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\
+        \\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\
+        \\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\
+        \\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\
+        \\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"#
+
 -- | Get a byte from a specific index
 indexWord8Array :: ByteArray -> Int -> Word8
 indexWord8Array (ByteArray ba) (I# ix) =

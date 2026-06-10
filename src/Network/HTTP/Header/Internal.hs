@@ -9,7 +9,8 @@ module Network.HTTP.Header.Internal where
 import Control.Exception (Exception)
 import Control.Monad.ST (runST)
 import Data.Array.Byte (ByteArray (..))
-import Data.Bits (unsafeShiftR, (.&.), (.|.))
+import Data.Bits (unsafeShiftL, unsafeShiftR, (.&.), (.|.))
+import Data.ByteString (ByteString)
 import Data.Char (chr, ord)
 import Data.Hashable (Hashable (..))
 import Data.List (find, intercalate)
@@ -31,6 +32,7 @@ import Network.HTTP.LowLevel (
     c2w,
     copyAddrToByteArray,
     finalShift,
+    hashIndex,
     indexWord8Array,
     indexWord8OffRawAddr,
     isBadChar,
@@ -52,20 +54,31 @@ import Network.HTTP.LowLevel (
 -- bytes were originally upper-case, but is commonly only used
 -- in HTTP\/1 when showing\/encoding the header name.
 data HeaderName
-    = HeaderName !ByteArray !Bitmap
+    = HeaderName
+        !ByteArray
+        !Bitmap
+        -- | The 'HashBitmap' is purposely not strict, so that it is only
+        -- evaluated if t'Headers' are used. This means it will be quicker
+        -- if anyone needs to make a full HTTP headers 'ByteString' straight
+        -- from @[Header]@
+        HashBitmap
     deriving (Show)
 
 instance Eq HeaderName where
-    HeaderName ba1 _ == HeaderName ba2 _ = ba1 == ba2
+    HeaderName ba1 _ _ == HeaderName ba2 _ _ = ba1 == ba2
 
 instance Ord HeaderName where
-    HeaderName ba1 _ `compare` HeaderName ba2 _=
+    HeaderName ba1 _ _ `compare` HeaderName ba2 _ _ =
         ba1 `compare` ba2
 
 instance Hashable HeaderName where
     hash (HeaderName a _) = hash a
     hashWithSalt i (HeaderName a _) = hashWithSalt i a
 
+-- | The amount of bytes in a t'HeaderName'.
+headerNameLength :: HeaderName -> Int
+headerNameLength (HeaderName ba _ _) = sizeOfByteArray ba
+{-# INLINE headerNameLength #-}
 
 -- | Bits from "left-to-right" that show which bytes were
 -- originally upper-case.
@@ -130,7 +143,7 @@ w64s =
 -- Only used in testing, since the parse functions should ensure any created
 -- 'HeaderName' has no bad bytes.
 isValidHeaderName :: HeaderName -> Bool
-isValidHeaderName (HeaderName arr _) =
+isValidHeaderName (HeaderName arr _ _) =
     case baLen of
         0 -> False
         _ -> loop 0
@@ -156,7 +169,7 @@ instance (Show s, Typeable s) => Exception (HeaderNameException s)
 -- (INLINE pragma helps in making the literal size a strict machine word)
 unsafePackLiteral :: Addr# -> Word64# -> HeaderName
 unsafePackLiteral addr w64 =
-    HeaderName ba (OneWord (W64# w64))
+    HeaderName ba (OneWord (W64# w64)) (bitmapFromByteArray ba)
   where
     size = cstringLength# addr
     ba = runST $ do
@@ -173,7 +186,8 @@ unsafePackLiteral addr w64 =
 unsafeMkHeaderName :: String -> Word64 -> HeaderName
 unsafeMkHeaderName s w64 =
     case parseHeaderNameFromString s of
-        Right (HeaderName hn _) -> HeaderName hn $ OneWord w64
+        Right (HeaderName hn _ hashBitmap) ->
+            HeaderName hn (OneWord w64) hashBitmap
         Left _ -> error $ "http-types: failed to parse literal header name: " <> s
 {-# INLINE [0] unsafeMkHeaderName #-}
 
@@ -193,10 +207,12 @@ parseHeaderNameFromString :: String -> Either (HeaderNameException String) Heade
 parseHeaderNameFromString s =
     case find isBadChar' s of
         Just c -> Left (InvalidFieldNameByte s c)
-        Nothing -> runST $ do
-            mba <- newByteArray len
-            mkBitmapRef <- newSTRef (id :: Bitmap -> Bitmap)
-            go mkBitmapRef mba
+        Nothing -> do
+            (ba, bitmap) <- runST $ do
+                mba <- newByteArray len
+                mkBitmapRef <- newSTRef (id :: Bitmap -> Bitmap)
+                go mkBitmapRef mba
+            pure $ HeaderName ba bitmap (bitmapFromByteArray ba)
   where
     isBadChar' c = c > '\xFF' || isBadChar (c2w c)
     len = length s
@@ -212,7 +228,7 @@ parseHeaderNameFromString s =
                     ba <- unsafeFreezeByteArray mba
                     mkBitmap <- readSTRef mkBitmapRef
                     let finalBitmap = mkBitmap (OneWord (W64# (newBitmap# `uncheckedShiftL64#` finalShift#)))
-                    pure $ Right (HeaderName ba finalBitmap)
+                    pure $ Right (ba, finalBitmap)
                 else do
                     W64# nextBitmap# <- updateRef newBitmap#
                     loop nextBitmap# nextIx# cs
@@ -226,3 +242,101 @@ parseHeaderNameFromString s =
                 | isMod64 (I# nextIx#) =
                     0 <$ modifySTRef mkBitmapRef (. MoreWords (W64# w64))
                 | otherwise = pure (W64# (w64 `uncheckedShiftL64#` 1#))
+
+-- | Use the 'hashIndex' to map the first six characters to two 'Word64's,
+-- and use the remaining 32 bits to add the length of the t'ByteArray'.
+bitmapFromByteArray :: ByteArray -> HashBitmap
+bitmapFromByteArray ba =
+    HashWords firstBitmap secondBitmap
+  where
+    firstBitmap = getMask 0 3 .|. getMask 1 2 .|. getMask 2 1 .|. getMask 3 0
+    -- We also move the 5th and 6th char by 32 and 48 to move
+    -- them to the upper half of the second bitmap
+    secondBitmap = getMask 4 3 .|. getMask 5 2 .|. lengthBitmap
+    getMask i shiftAmount
+        | i >= hdrLen = 0
+        | otherwise =
+            let maskIx = fromIntegral $ indexWord8Array ba i
+                maskBit = fromIntegral $ W8# (indexWord8OffRawAddr hashIndex maskIx)
+             in 1 `unsafeShiftL` (maskBit + (shiftAmount * 16))
+    lengthBitmap = 1 `unsafeShiftL` ((hdrLen `min` 32) - 1)
+    hdrLen = sizeOfByteArray ba
+
+-- | Both a header field name and its value.
+data Header
+    = Header {-# UNPACK #-} !HeaderName ByteString
+    deriving (Eq, Show)
+
+-- | Get the field name from the t'Header'
+headerName :: Header -> HeaderName
+headerName (Header name _) = name
+{-# INLINE headerName #-}
+
+-- | Get the field value from the t'Header'
+headerValue :: Header -> ByteString
+headerValue (Header _ val) = val
+{-# INLINE headerValue #-}
+
+-- | Construct a t'Header'
+toHeader :: HeaderName -> ByteString -> Header
+toHeader = Header
+{-# INLINE toHeader #-}
+
+-- | Infix operator synonym to construct a t'Header'
+(>:) :: HeaderName -> ByteString -> Header
+(>:) = Header
+{-# INLINE (>:) #-}
+
+-- | Collection of headers.
+--
+-- Faster than @[Header]@ in most cases:
+--
+--   * Adding to the front or back is equally fast
+--   * Can determine whether a header is absent or possibly present,
+--     which speeds up lookups and overrides. (which happen often)
+--   * 'Network.HTTP.Header.setHeader' guarantees you don't get duplicate headers.
+data Headers = Headers
+    { frontHeaders :: [Header]
+    , backHeaders :: [Header]
+    , contentBitmap :: {-# UNPACK #-} !HashBitmap
+    }
+
+instance Eq Headers where
+    Headers f1 b1 _ == Headers f2 b2 _ =
+        f1 == f2 && b1 == b2
+
+-- FIXME: make better instance for UX/DX
+instance Show Headers where
+    show hdrs =
+        "Headers {frontHeaders = "
+            <> show (frontHeaders hdrs)
+            <> ", backHeaders = "
+            <> show (backHeaders hdrs)
+            <> ", contentBitmap = "
+            <> show (MoreWords bitmap1 (OneWord bitmap2))
+            <> "}"
+      where
+        HashWords bitmap1 bitmap2 = contentBitmap hdrs
+
+-- | 128 bit mapping of the first 6 bytes of a t'HeaderName' and
+-- the total length of the t'HeaderName'.
+--
+-- The first 'Word64' contains the first 4 bytes of a t'HeaderName' using the
+-- 'hashIndex' to decide which bit to set in a 16 bit range; this results in
+-- the following sections:
+--
+-- > Using the header "Accept-Encoding":
+-- >
+-- >   a    c    c    e      p    t    length `min` 32
+-- >   |    |    |    |      |    |    |
+-- > 0x####_####_####_#### 0x####_####_####_####
+--
+-- Read the 'hashIndex' documentation for more explanation on how the bytes are
+-- translated into 16 bit maps.
+data HashBitmap
+    = HashWords
+        {-# UNPACK #-} !Word64
+        {-# UNPACK #-} !Word64
+
+instance Show HashBitmap where
+    show (HashWords a b) = show $ MoreWords a $ OneWord b
