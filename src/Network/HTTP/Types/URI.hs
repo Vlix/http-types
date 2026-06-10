@@ -116,7 +116,7 @@ type QueryItem = (B.ByteString, Maybe B.ByteString)
 -- | A sequence of 'QueryItem's.
 type Query = [QueryItem]
 
--- | Like Query, but with 'Text' instead of 'B.ByteString' (UTF8-encoded).
+-- | Like Query, but with t'Text' instead of 'B.ByteString' (UTF8-encoded).
 --
 -- @since 0.5.2
 type QueryText = [(Text, Maybe Text)]

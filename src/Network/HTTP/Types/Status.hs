@@ -4,7 +4,7 @@
 
 -- | Types and constants to describe HTTP status codes.
 --
--- At the bottom are some functions to check if a given 'Status' is from a certain category. (i.e. @1XX@, @2XX@, etc.)
+-- At the bottom are some functions to check if a given t'Status' is from a certain category. (i.e. @1XX@, @2XX@, etc.)
 module Network.HTTP.Types.Status (
     -- * HTTP Status
 
@@ -140,11 +140,11 @@ import GHC.Generics (Generic)
 -- Note that the 'Show' instance is only for debugging.
 data Status = Status
     { statusCode :: Int
-    -- ^ The 3-digit code of a 'Status'
+    -- ^ The 3-digit code of a t'Status'
     --
     -- For example: "200" in a @200 OK@ status
     , statusMessage :: B.ByteString
-    -- ^ The textual message of a 'Status'
+    -- ^ The textual message of a t'Status'
     --
     -- For example: "Not Found" in a @404 Not Found@ status
     }
@@ -156,7 +156,7 @@ data Status = Status
           Generic
         )
 
--- FIXME: If the data constructor of 'Status' is ever deprecated, we should define
+-- FIXME: If the data constructor of t'Status' is ever deprecated, we should define
 -- a pattern synonym to minimize any breakage. This also involves changing the
 -- name of the constructor, so that it doesn't clash with the new pattern synonym
 -- that's replacing it.
@@ -164,18 +164,18 @@ data Status = Status
 -- > data Status = MkStatus ...
 -- > pattern Status code msg = MkStatus code msg
 
--- | A 'Status' is equal to another 'Status' if the status codes are equal.
+-- | A t'Status' is equal to another t'Status' if the status codes are equal.
 instance Eq Status where
     Status{statusCode = a} == Status{statusCode = b} = a == b
 
--- | 'Status'es are ordered according to their status codes only.
+-- | t'Status'es are ordered according to their status codes only.
 instance Ord Status where
     compare Status{statusCode = a} Status{statusCode = b} = a `compare` b
 
 -- | Be advised, that when using the \"enumFrom*\" family of methods or
 -- ranges in lists, it will generate all possible status codes.
 --
--- E.g. @[status100 .. status200]@ generates 'Status'es of @100, 101, 102 .. 198, 199, 200@
+-- E.g. @[status100 .. status200]@ generates t'Status'es of @100, 101, 102 .. 198, 199, 200@
 --
 -- The statuses not included in this library will have an empty message.
 --
@@ -238,7 +238,7 @@ instance Bounded Status where
     minBound = status100
     maxBound = status511
 
--- | Create a 'Status' from a status code and message.
+-- | Create a t'Status' from a status code and message.
 --
 -- @since 0.7.3
 mkStatus :: Int -> B.ByteString -> Status
