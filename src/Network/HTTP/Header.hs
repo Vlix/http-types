@@ -95,6 +95,14 @@ module Network.HTTP.Header (
     hAcceptEncoding,
     hAcceptLanguage,
     hAcceptRanges,
+    hAccessControlAllowCredentials,
+    hAccessControlAllowHeaders,
+    hAccessControlAllowMethods,
+    hAccessControlAllowOrigin,
+    hAccessControlExposeHeaders,
+    hAccessControlMaxAge,
+    hAccessControlRequestMethod,
+    hAccessControlRequestHeaders,
     hAge,
     hAllow,
     hAuthorization,
@@ -121,6 +129,7 @@ module Network.HTTP.Header (
     hIfRange,
     hIfUnmodifiedSince,
     hLastModified,
+    hLink,
     hLocation,
     hMaxForwards,
     hMIMEVersion,
@@ -135,6 +144,7 @@ module Network.HTTP.Header (
     hRetryAfter,
     hServer,
     hSetCookie,
+    hStrictTransportSecurity,
     hTE,
     hTrailer,
     hTransferEncoding,
@@ -144,6 +154,13 @@ module Network.HTTP.Header (
     hVia,
     hWarning,
     hWWWAuthenticate,
+
+    -- *** HTTP/2 and HTTP/3
+    hPseudoAuthority,
+    hPseudoMethod,
+    hPseudoPath,
+    hPseudoScheme,
+    hPseudoStatus,
 
     -- * Utility functions
 

@@ -34,6 +34,54 @@ hAcceptLanguage = unsafeMkHeaderName "accept-language" 0x8100_0000_0000_0000
 hAcceptRanges :: HeaderName
 hAcceptRanges = unsafeMkHeaderName "accept-ranges" 0x8100_0000_0000_0000
 
+-- | [Access-Control-Allow-Credentials](https://www.w3.org/TR/2014/REC-cors-20140116/#access-control-allow-origin-response-header)
+--
+-- @since 0.13.0
+hAccessControlAllowCredentials :: HeaderName
+hAccessControlAllowCredentials = unsafeMkHeaderName "access-control-allow-credentials" 0x8101_0400_0000_0000
+
+-- | [Access-Control-Allow-Headers](https://www.w3.org/TR/2014/REC-cors-20140116/#access-control-allow-headers-response-header)
+--
+-- @since 0.13.0
+hAccessControlAllowHeaders :: HeaderName
+hAccessControlAllowHeaders = unsafeMkHeaderName "access-control-allow-headers" 0x8101_0400_0000_0000
+
+-- | [Access-Control-Allow-Methods](https://www.w3.org/TR/2014/REC-cors-20140116/#access-control-allow-methods-response-header)
+--
+-- @since 0.13.0
+hAccessControlAllowMethods :: HeaderName
+hAccessControlAllowMethods = unsafeMkHeaderName "access-control-allow-methods" 0x8101_0400_0000_0000
+
+-- | [Access-Control-Allow-Origin](https://www.w3.org/TR/2014/REC-cors-20140116/#access-control-allow-origin-response-header)
+--
+-- @since 0.13.0
+hAccessControlAllowOrigin :: HeaderName
+hAccessControlAllowOrigin = unsafeMkHeaderName "access-control-allow-origin" 0x8101_0400_0000_0000
+
+-- | [Access-Control-Expose-Headers](https://www.w3.org/TR/2014/REC-cors-20140116/#access-control-expose-headers-response-header)
+--
+-- @since 0.13.0
+hAccessControlExposeHeaders :: HeaderName
+hAccessControlExposeHeaders = unsafeMkHeaderName "access-control-expose-headers" 0x8101_0200_0000_0000
+
+-- | [Access-Control-Max-Age](https://www.w3.org/TR/2014/REC-cors-20140116/#access-control-max-age-response-header)
+--
+-- @since 0.13.0
+hAccessControlMaxAge :: HeaderName
+hAccessControlMaxAge = unsafeMkHeaderName "access-control-max-age" 0x8101_1000_0000_0000
+
+-- | [Access-Control-Request-Method](https://www.w3.org/TR/2014/REC-cors-20140116/#access-control-request-method-request-header)
+--
+-- @since 0.13.0
+hAccessControlRequestMethod :: HeaderName
+hAccessControlRequestMethod = unsafeMkHeaderName "access-control-request-method" 0x8101_0100_0000_0000
+
+-- | [Access-Control-Request-Headers](https://www.w3.org/TR/2014/REC-cors-20140116/#access-control-request-headers-request-header)
+--
+-- @since 0.13.0
+hAccessControlRequestHeaders :: HeaderName
+hAccessControlRequestHeaders = unsafeMkHeaderName "access-control-request-headers" 0x8101_0100_0000_0000
+
 -- | [Age](https://www.rfc-editor.org/rfc/rfc9111.html#name-age)
 --
 -- @since 0.13.0
@@ -192,6 +240,12 @@ hIfUnmodifiedSince = unsafeMkHeaderName "if-unmodified-since" 0x9002_0000_0000_0
 hLastModified :: HeaderName
 hLastModified = unsafeMkHeaderName "last-modified" 0x8400_0000_0000_0000
 
+-- | [Link](https://www.rfc-editor.org/rfc/rfc8288.html#section-3)
+--
+-- @since 0.13.0
+hLink :: HeaderName
+hLink = unsafeMkHeaderName "link" 0x8000_0000_0000_0000
+
 -- | [Location](https://www.rfc-editor.org/rfc/rfc9110.html#name-location)
 --
 -- @since 0.13.0
@@ -278,6 +332,12 @@ hServer = unsafeMkHeaderName "server" 0x8000_0000_0000_0000
 hSetCookie :: HeaderName
 hSetCookie = unsafeMkHeaderName "set-cookie" 0x8800_0000_0000_0000
 
+-- | [Strict-Transport-Security](https://www.rfc-editor.org/rfc/rfc6797.html#section-6.1)
+--
+-- @since 0.13.0
+hStrictTransportSecurity :: HeaderName
+hStrictTransportSecurity = unsafeMkHeaderName "strict-transport-security" 0x8100_4000_0000_0000
+
 -- | [TE](https://www.rfc-editor.org/rfc/rfc9110.html#name-te)
 --
 -- @since 0.13.0
@@ -333,3 +393,43 @@ hWarning = unsafeMkHeaderName "warning" 0x8000_0000_0000_0000
 -- @since 0.13.0
 hWWWAuthenticate :: HeaderName
 hWWWAuthenticate = unsafeMkHeaderName "www-authenticate" 0xE800_0000_0000_0000
+
+-- | [:authority](https://www.rfc-editor.org/rfc/rfc9113.html#name-request-pseudo-header-field)
+--
+-- Used in HTTP/2 and HTTP/3
+--
+-- @since 0.13.0
+hPseudoAuthority :: HeaderName
+hPseudoAuthority = unsafeMkHeaderName ":authority" 0
+
+-- | [:method](https://www.rfc-editor.org/rfc/rfc9113.html#name-request-pseudo-header-field)
+--
+-- Used in HTTP/2 and HTTP/3
+--
+-- @since 0.13.0
+hPseudoMethod :: HeaderName
+hPseudoMethod = unsafeMkHeaderName ":method" 0
+
+-- | [:path](https://www.rfc-editor.org/rfc/rfc9113.html#name-request-pseudo-header-field)
+--
+-- Used in HTTP/2 and HTTP/3
+--
+-- @since 0.13.0
+hPseudoPath :: HeaderName
+hPseudoPath = unsafeMkHeaderName ":path" 0
+
+-- | [:scheme](https://www.rfc-editor.org/rfc/rfc9113.html#name-request-pseudo-header-field)
+--
+-- Used in HTTP/2 and HTTP/3
+--
+-- @since 0.13.0
+hPseudoScheme :: HeaderName
+hPseudoScheme = unsafeMkHeaderName ":scheme" 0
+
+-- | [:status](https://www.rfc-editor.org/rfc/rfc9113.html#section-8.3.2)
+--
+-- Used in HTTP/2 and HTTP/3
+--
+-- @since 0.13.0
+hPseudoStatus :: HeaderName
+hPseudoStatus = unsafeMkHeaderName ":status" 0
