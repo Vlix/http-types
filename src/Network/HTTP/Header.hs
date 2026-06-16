@@ -87,6 +87,7 @@ module Network.HTTP.Header (
 
     -- | These functions write straight to a pointer in memory.
     encodeHeaderNameToPtr,
+    encodeHeaderNameToPtrLower,
 
     -- ** Common Header Names
 
@@ -176,7 +177,6 @@ import Control.Monad.ST (runST, stToIO)
 import Data.Array.Byte (ByteArray (..))
 import qualified Data.ByteString as B (intercalate, length)
 import Data.ByteString.Internal (ByteString (BS), accursedUnutterablePerformIO, unsafeCreate)
-import Data.Char (toUpper)
 
 import Data.STRef (modifySTRef, newSTRef, readSTRef)
 import Data.Text (Text)
@@ -211,12 +211,13 @@ import Network.HTTP.Header.Internal (
     HeaderName (..),
     HeaderNameException (..),
     Headers (..),
+    allHeaders,
     bitmapFromByteArray,
-    bitmapIsZero,
-    bitmapToList,
     headerName,
     headerNameIndexAt,
     headerNameLength,
+    headerNameToString,
+    headerNameToStringLower,
     headerValue,
     parseHeaderNameFromString,
     toHeader,
@@ -233,7 +234,6 @@ import Network.HTTP.LowLevel (
     newByteArray,
     sizeOfByteArray,
     strictIndex,
-    unsafeByteArrayToString,
     unsafeFreezeByteArray,
     w2c,
     writeWord8Array,
@@ -314,31 +314,24 @@ toHeaderNameStrict bs@(BS fptr size) =
 
 -- | Turns the t'HeaderName' into a case-sensitive 'ByteString'.
 --
--- Depending on how the t'HeaderName' is constructed, this might only return
--- the original 'ByteString' that was used to create it, or it creates a
--- 'ByteString' from the internal t'ByteArray' + casing bitmap.
---
 -- >>> encodeHeaderName (unsafeParseHeaderName "Content-Type")
 -- "Content-Type"
+--
+-- If you're implementing HTTP/2 logic, use 'encodeHeaderNameLower'.
 encodeHeaderName :: HeaderName -> ByteString
-encodeHeaderName hn@(HeaderName arr _ _) =
-    unsafeCreate (sizeOfByteArray arr) $ encodeHeaderNameToPtr hn
+encodeHeaderName hn@(HeaderName ba _ _) =
+    unsafeCreate (sizeOfByteArray ba) $ encodeHeaderNameToPtr hn
 
 -- | Like 'encodeHeaderName', but writes to a bare t'Ptr' 'Word8'.
 encodeHeaderNameToPtr :: HeaderName -> Ptr Word8 -> IO ()
-encodeHeaderNameToPtr (HeaderName arr bitmap _) startPtr = do
-    stToIO $ copyByteArrayToAddr arr startPtr
+encodeHeaderNameToPtr hn@(HeaderName _ bitmap _) startPtr = do
+    encodeHeaderNameToPtrLower hn startPtr
     go bitmap startPtr
   where
     go (OneWord w64) ptr = oneWord w64 ptr
     go (MoreWords w64 more) ptr = do
         oneWord w64 ptr
         go more $ ptr `plusPtr` 64
-    unsetFirstBit :: Word64 -> Word64
-    unsetFirstBit w64 = w64 .&. 0x7FFF_FFFF_FFFF_FFFF
-    -- this unsets the 0x20 bit
-    capitalize :: Word8 -> Word8
-    capitalize w8 = w8 .&. 0xDF
     oneWord (W64# w64#) ptr = do
         if I# clz# >= 64
             then pure ()
@@ -350,43 +343,29 @@ encodeHeaderNameToPtr (HeaderName arr bitmap _) startPtr = do
                 oneWord adjustedW64 newPtr
       where
         clz# = word2Int# (clz64# w64#)
+    unsetFirstBit :: Word64 -> Word64
+    unsetFirstBit w64 = w64 .&. 0x7FFF_FFFF_FFFF_FFFF
+    -- this unsets the 0x20 bit
+    capitalize :: Word8 -> Word8
+    capitalize w8 = w8 .&. 0xDF
 
 -- | Encode the t'HeaderName' to a lower-case 'ByteString'.
 --
 -- >>> encodeHeaderNameLower (unsafeParseHeaderName "Content-Type")
 -- "content-type"
+--
+-- If you're implementing HTTP/2 logic, use this one.
 encodeHeaderNameLower :: HeaderName -> ByteString
-encodeHeaderNameLower (HeaderName ba _ _) =
-    unsafeCreate (sizeOfByteArray ba) $
-        stToIO . copyByteArrayToAddr ba
+encodeHeaderNameLower hn@(HeaderName ba _ _) =
+    unsafeCreate (sizeOfByteArray ba) $ encodeHeaderNameToPtrLower hn
 
--- | Turn the t'HeaderName' into a case-sensitive 'String'.
+-- | Like 'encodeHeaderNameLower', but writes to a bare t'Ptr' 'Word8'.
 --
--- >>> headerNameToString (unsafeParseHeaderName "Content-Type")
--- "Content-Type"
-headerNameToString :: HeaderName -> String
-headerNameToString hn@(HeaderName _ bm _)
-    | bitmapIsZero bm = lowerCaseList
-    | otherwise = go (0 :: Int) (bitmapToList bm) lowerCaseList
-  where
-    firstBit = 0x8000_0000_0000_0000
-    lowerCaseList = headerNameToStringLower hn
-    go _ [] rest = rest
-    go _ _ [] = []
-    go ix (w64 : bmRest) s@(c : cs)
-        | ix == 64 = go 0 bmRest s
-        | otherwise = c' : go (ix + 1) (newW64 : bmRest) cs
-      where
-        c' = if w64 .&. firstBit == 0 then c else toUpper c
-        newW64 = w64 `unsafeShiftL` 1
-
--- | Turn the t'HeaderName' into a lower-case 'String'
---
--- >>> headerNameToStringLower (unsafeParseHeaderName "Content-Type")
--- "content-type"
-headerNameToStringLower :: HeaderName -> String
-headerNameToStringLower (HeaderName arr _ _) = unsafeByteArrayToString arr
-{-# INLINE headerNameToStringLower #-}
+-- If you're implementing HTTP/2 logic, use this one.
+encodeHeaderNameToPtrLower :: HeaderName -> Ptr Word8 -> IO ()
+encodeHeaderNameToPtrLower (HeaderName ba _ _) =
+    stToIO . copyByteArrayToAddr ba
+{-# INLINE encodeHeaderNameToPtrLower #-}
 
 -- | Tries to create a t'HeaderName' from the given t'Text', while checking
 -- for any invalid characters. A zero-length argument will result in
@@ -643,10 +622,6 @@ removeHeader hdrName@(HeaderName _ _ hashBitmap) hdrs@Headers{..}
   where
     isPresent = contentBitmap `matchBitmap` hashBitmap
     removeIt = filter $ (/=) hdrName . headerName
-
--- | Get all t'Header's in order.
-allHeaders :: Headers -> [Header]
-allHeaders hdrs = frontHeaders hdrs <> reverse (backHeaders hdrs)
 
 -- | An empty collection of headers.
 --

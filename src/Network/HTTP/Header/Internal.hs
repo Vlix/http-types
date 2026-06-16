@@ -12,11 +12,12 @@ import Control.Monad.ST (runST)
 import Data.Array.Byte (ByteArray (..))
 import Data.Bits (unsafeShiftL, unsafeShiftR, (.&.), (.|.))
 import Data.ByteString (ByteString)
-import Data.Char (chr, ord)
+import Data.ByteString.Char8 (unpack)
+import Data.Char (chr, ord, toUpper)
 #ifdef HASHABLE
 import Data.Hashable (Hashable (..))
 #endif
-import Data.List (find, intercalate)
+import Data.List as L (find, intercalate)
 import Data.STRef (modifySTRef, newSTRef, readSTRef)
 import Data.Typeable (Typeable)
 import Data.Word (Word64)
@@ -43,6 +44,7 @@ import Network.HTTP.LowLevel (
     newByteArray,
     sizeOfByteArray,
     strictIndex,
+    unsafeByteArrayToString,
     unsafeFreezeByteArray,
     writeWord8Array,
  )
@@ -65,16 +67,44 @@ data HeaderName
         -- if anyone needs to make a full HTTP headers 'ByteString' straight
         -- from @[Header]@
         HashBitmap
-    deriving (Show)
 
 -- | Used in debugging to show the insides of a t'HeaderName'
 rawHeaderName :: HeaderName -> String
 rawHeaderName (HeaderName ba bitmap hashBitmap) =
     "HeaderName " <> show ba <> " " <> show bitmap <> " " <> show hashBitmap
 
--- FIXME: Change to pretty print for better UX/DX
--- instance Show HeaderName where
---     show = headerNameToString
+instance Show HeaderName where
+    show = headerNameToString
+
+-- | Turn the t'HeaderName' into a case-sensitive 'String'.
+--
+-- >>> let Right hdr = parseHeaderNameFromString "Content-Type"
+-- >>> headerNameToString hdr
+-- "Content-Type"
+headerNameToString :: HeaderName -> String
+headerNameToString hn@(HeaderName _ bm _)
+    | bitmapIsZero bm = lowerCaseList
+    | otherwise = go (0 :: Int) (bitmapToList bm) lowerCaseList
+  where
+    firstBit = 0x8000_0000_0000_0000
+    lowerCaseList = headerNameToStringLower hn
+    go _ [] rest = rest
+    go _ _ [] = []
+    go ix (w64 : bmRest) s@(c : cs)
+        | ix == 64 = go 0 bmRest s
+        | otherwise = c' : go (ix + 1) (newW64 : bmRest) cs
+      where
+        c' = if w64 .&. firstBit == 0 then c else toUpper c
+        newW64 = w64 `unsafeShiftL` 1
+
+-- | Turn the t'HeaderName' into a lower-case 'String'
+--
+-- >>> let Right hdr = parseHeaderNameFromString "Content-Type"
+-- >>> headerNameToStringLower hdr
+-- "content-type"
+headerNameToStringLower :: HeaderName -> String
+headerNameToStringLower (HeaderName arr _ _) = unsafeByteArrayToString arr
+{-# INLINE headerNameToStringLower #-}
 
 instance Eq HeaderName where
     HeaderName ba1 _ _ == HeaderName ba2 _ _ = ba1 == ba2
@@ -300,7 +330,11 @@ bitmapFromByteArray ba =
 -- @
 data Header
     = Header {-# UNPACK #-} !HeaderName ByteString
-    deriving (Eq, Show)
+    deriving (Eq)
+
+instance Show Header where
+    show (Header name val) =
+        show name <> ": " <> unpack val
 
 #ifdef HASHABLE
 instance Hashable Header where
@@ -345,18 +379,27 @@ instance Eq Headers where
     Headers f1 b1 _ == Headers f2 b2 _ =
         f1 == f2 && b1 == b2
 
--- FIXME: make better instance for UX/DX
+-- | Shows all headers with newlines.
+--
+-- Use @show . allHeaders@ to print on one line.
 instance Show Headers where
-    show hdrs =
-        "Headers {frontHeaders = "
-            <> show (frontHeaders hdrs)
-            <> ", backHeaders = "
-            <> show (backHeaders hdrs)
-            <> ", contentBitmap = "
-            <> show (MoreWords bitmap1 (OneWord bitmap2))
-            <> "}"
-      where
-        HashWords bitmap1 bitmap2 = contentBitmap hdrs
+    show = L.intercalate "\n" . fmap show . allHeaders
+
+rawHeaders :: Headers -> String
+rawHeaders hdrs =
+    "Headers {frontHeaders = "
+        <> show (frontHeaders hdrs)
+        <> ", backHeaders = "
+        <> show (backHeaders hdrs)
+        <> ", contentBitmap = "
+        <> show (MoreWords bitmap1 (OneWord bitmap2))
+        <> "}"
+  where
+    HashWords bitmap1 bitmap2 = contentBitmap hdrs
+
+-- | Get all t'Header's in order.
+allHeaders :: Headers -> [Header]
+allHeaders hdrs = frontHeaders hdrs <> reverse (backHeaders hdrs)
 
 -- | 128 bit mapping of the first 6 bytes of a t'HeaderName' and
 -- the total length of the t'HeaderName'.
