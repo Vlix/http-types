@@ -70,8 +70,10 @@ Test-suite spec
   hs-source-dirs:      test, src
   other-modules:       Network.HTTP.Header
                        Network.HTTP.HeaderSpec
+                       Network.HTTP.Header.Constants
                        Network.HTTP.Header.Internal
                        Network.HTTP.LowLevel
+                       Network.HTTP.LowLevelSpec
                        Network.HTTP.Types
                        Network.HTTP.Types.Header
                        Network.HTTP.Types.HeaderSpec

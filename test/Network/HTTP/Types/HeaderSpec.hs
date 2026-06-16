@@ -38,76 +38,78 @@ spec = do
                     range = show start <> "-" <> show end
                  in parseByteRanges ("bytes=" <> B8.pack range) `shouldBe` Nothing
 
-type HeaderTuple = (HeaderName, HeaderName)
+type HeaderTuple = (HeaderName, HeaderName, B.ByteString)
 
 allHeaders :: [HeaderTuple]
 allHeaders =
-    [ (hAccept, "Accept")
-    , (hAcceptCharset, "Accept-Charset")
-    , (hAcceptEncoding, "Accept-Encoding")
-    , (hAcceptLanguage, "Accept-Language")
-    , (hAcceptRanges, "Accept-Ranges")
-    , (hAge, "Age")
-    , (hAllow, "Allow")
-    , (hAuthorization, "Authorization")
-    , (hCacheControl, "Cache-Control")
-    , (hConnection, "Connection")
-    , (hContentDisposition, "Content-Disposition")
-    , (hContentEncoding, "Content-Encoding")
-    , (hContentLanguage, "Content-Language")
-    , (hContentLength, "Content-Length")
-    , (hContentLocation, "Content-Location")
-    , (hContentMD5, "Content-MD5")
-    , (hContentRange, "Content-Range")
-    , (hContentType, "Content-Type")
-    , (hCookie, "Cookie")
-    , (hDate, "Date")
-    , (hETag, "ETag")
-    , (hExpect, "Expect")
-    , (hExpires, "Expires")
-    , (hFrom, "From")
-    , (hHost, "Host")
-    , (hIfMatch, "If-Match")
-    , (hIfModifiedSince, "If-Modified-Since")
-    , (hIfNoneMatch, "If-None-Match")
-    , (hIfRange, "If-Range")
-    , (hIfUnmodifiedSince, "If-Unmodified-Since")
-    , (hLastModified, "Last-Modified")
-    , (hLocation, "Location")
-    , (hMaxForwards, "Max-Forwards")
-    , (hMIMEVersion, "MIME-Version")
-    , (hOrigin, "Origin")
-    , (hPragma, "Pragma")
-    , (hPrefer, "Prefer")
-    , (hPreferenceApplied, "Preference-Applied")
-    , (hProxyAuthenticate, "Proxy-Authenticate")
-    , (hProxyAuthorization, "Proxy-Authorization")
-    , (hRange, "Range")
-    , (hReferer, "Referer")
-    , (hRetryAfter, "Retry-After")
-    , (hServer, "Server")
-    , (hSetCookie, "Set-Cookie")
-    , (hTE, "TE")
-    , (hTrailer, "Trailer")
-    , (hTransferEncoding, "Transfer-Encoding")
-    , (hUpgrade, "Upgrade")
-    , (hUserAgent, "User-Agent")
-    , (hVary, "Vary")
-    , (hVia, "Via")
-    , (hWWWAuthenticate, "WWW-Authenticate")
-    , (hWarning, "Warning")
+    [ (hAccept, "Accept", "Accept")
+    , (hAcceptCharset, "Accept-Charset", "Accept-Charset")
+    , (hAcceptEncoding, "Accept-Encoding", "Accept-Encoding")
+    , (hAcceptLanguage, "Accept-Language", "Accept-Language")
+    , (hAcceptRanges, "Accept-Ranges", "Accept-Ranges")
+    , (hAge, "Age", "Age")
+    , (hAllow, "Allow", "Allow")
+    , (hAuthorization, "Authorization", "Authorization")
+    , (hCacheControl, "Cache-Control", "Cache-Control")
+    , (hConnection, "Connection", "Connection")
+    , (hContentDisposition, "Content-Disposition", "Content-Disposition")
+    , (hContentEncoding, "Content-Encoding", "Content-Encoding")
+    , (hContentLanguage, "Content-Language", "Content-Language")
+    , (hContentLength, "Content-Length", "Content-Length")
+    , (hContentLocation, "Content-Location", "Content-Location")
+    , (hContentMD5, "Content-MD5", "Content-MD5")
+    , (hContentRange, "Content-Range", "Content-Range")
+    , (hContentType, "Content-Type", "Content-Type")
+    , (hCookie, "Cookie", "Cookie")
+    , (hDate, "Date", "Date")
+    , (hETag, "ETag", "ETag")
+    , (hExpect, "Expect", "Expect")
+    , (hExpires, "Expires", "Expires")
+    , (hFrom, "From", "From")
+    , (hHost, "Host", "Host")
+    , (hIfMatch, "If-Match", "If-Match")
+    , (hIfModifiedSince, "If-Modified-Since", "If-Modified-Since")
+    , (hIfNoneMatch, "If-None-Match", "If-None-Match")
+    , (hIfRange, "If-Range", "If-Range")
+    , (hIfUnmodifiedSince, "If-Unmodified-Since", "If-Unmodified-Since")
+    , (hLastModified, "Last-Modified", "Last-Modified")
+    , (hLocation, "Location", "Location")
+    , (hMaxForwards, "Max-Forwards", "Max-Forwards")
+    , (hMIMEVersion, "MIME-Version", "MIME-Version")
+    , (hOrigin, "Origin", "Origin")
+    , (hPragma, "Pragma", "Pragma")
+    , (hPrefer, "Prefer", "Prefer")
+    , (hPreferenceApplied, "Preference-Applied", "Preference-Applied")
+    , (hProxyAuthenticate, "Proxy-Authenticate", "Proxy-Authenticate")
+    , (hProxyAuthorization, "Proxy-Authorization", "Proxy-Authorization")
+    , (hRange, "Range", "Range")
+    , (hReferer, "Referer", "Referer")
+    , (hRetryAfter, "Retry-After", "Retry-After")
+    , (hServer, "Server", "Server")
+    , (hSetCookie, "Set-Cookie", "Set-Cookie")
+    , (hTE, "TE", "TE")
+    , (hTrailer, "Trailer", "Trailer")
+    , (hTransferEncoding, "Transfer-Encoding", "Transfer-Encoding")
+    , (hUpgrade, "Upgrade", "Upgrade")
+    , (hUserAgent, "User-Agent", "User-Agent")
+    , (hVary, "Vary", "Vary")
+    , (hVia, "Via", "Via")
+    , (hWWWAuthenticate, "WWW-Authenticate", "WWW-Authenticate")
+    , (hWarning, "Warning", "Warning")
     ]
 
 headerCheck :: HeaderTuple -> Spec
-headerCheck (hdr, msg) = do
-    it (B8.unpack . pad $ original msg) $ hdr `shouldBe` msg
+headerCheck (hdr, msg, raw) = do
+    it (B8.unpack $ pad raw) $ do
+        hdr `shouldBe` msg
+        original hdr `shouldBe` raw
   where
     pad bs =
         let padding = B8.replicate (maxMsg - B.length bs) ' '
          in bs <> padding
 
 maxMsg :: Int
-maxMsg = maximum $ fmap (B.length . original . snd) allHeaders
+maxMsg = maximum $ fmap (\(_, _, raw) -> B.length raw) allHeaders
 
 -- | Generate valid ranges.
 --
