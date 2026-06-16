@@ -94,6 +94,23 @@ headerNameLength :: HeaderName -> Int
 headerNameLength (HeaderName ba _ _) = sizeOfByteArray ba
 {-# INLINE headerNameLength #-}
 
+-- | Returns the byte at the given offset (in bytes).
+-- Does /NOT/ check bounds, so any @index >= 'headerNameLength'@ will return
+-- undefined results.
+unsafeHeaderNameIndexAt :: HeaderName -> Int -> Word8
+unsafeHeaderNameIndexAt (HeaderName ba _ _) = indexWord8Array ba
+{-# INLINE unsafeHeaderNameIndexAt #-}
+
+-- | Returns the byte at the given offset (in bytes), or 'Nothing' if the index
+-- is out of bounds.
+--
+-- If you know you will stay within the bounds, you can use 'unsafeHeaderNameIndexAt'.
+headerNameIndexAt :: HeaderName -> Int -> Maybe Word8
+headerNameIndexAt hn ix
+    | ix < headerNameLength hn =
+        Just $ unsafeHeaderNameIndexAt hn ix
+    | otherwise = Nothing
+
 -- | Bits from "left-to-right" that show which bytes were
 -- originally upper-case.
 --

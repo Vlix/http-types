@@ -57,6 +57,7 @@ module Network.HTTP.Header (
     -- @i.e. the \"Content-Type\" part of "Content-Type: application\/json"@
     HeaderName,
     headerNameLength,
+    headerNameIndexAt,
 
     -- ** Parsing \/ Decoding
 
@@ -71,9 +72,10 @@ module Network.HTTP.Header (
 
     -- *** Unsafe versions
 
-    -- | These functions will throw an exception if they encounter an illegal
-    -- byte in the to-be-parsed header name.
+    -- | These functions might throw exceptions, or they might have undefined
+    -- behaviour. Please make sure to read the explanations carefully.
     unsafeParseHeaderName,
+    unsafeHeaderNameIndexAt,
 
     -- ** Encoding
     encodeHeaderName,
@@ -213,10 +215,12 @@ import Network.HTTP.Header.Internal (
     bitmapIsZero,
     bitmapToList,
     headerName,
+    headerNameIndexAt,
     headerNameLength,
     headerValue,
     parseHeaderNameFromString,
     toHeader,
+    unsafeHeaderNameIndexAt,
     (>:),
  )
 import Network.HTTP.LowLevel (
