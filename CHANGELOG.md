@@ -1,10 +1,5 @@
 # Changelog for `http-types`
 
-## 0.13 [unreleased]
-
-* Add support for the QUERY method and Accept-Query response field name from
-  [RFC 10008](https://www.rfc-editor.org/rfc/rfc10008.html).
-
 ## 0.12.7 [unreleased]
 
 * Add parsing and rendering functions for `Status`
@@ -31,6 +26,7 @@
   * `hForwarded`
   * `hLink`
   * `hStrictTransportSecurity`
+* Add `hAcceptQuery` response field name from [RFC 10008](https://www.rfc-editor.org/rfc/rfc10008.html).
 
 ## 0.12.6 [2026-08-13]
 

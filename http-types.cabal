@@ -24,7 +24,7 @@ Extra-doc-files:
 Source-repository this
   type: git
   location: https://github.com/Vlix/http-types.git
-  tag: v0.13.0
+  tag: v0.12.7
 
 Source-repository head
   type: git
