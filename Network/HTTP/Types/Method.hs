@@ -22,6 +22,7 @@ module Network.HTTP.Types.Method (
     methodConnect,
     methodOptions,
     methodPatch,
+    methodQuery,
 
     -- ** Standard Methods
 
@@ -89,8 +90,15 @@ methodOptions = renderStdMethod OPTIONS
 methodPatch :: Method
 methodPatch = renderStdMethod PATCH
 
+-- | QUERY Method as defined in
+--   <https://www.rfc-editor.org/rfc/rfc10008.html#section-2 RFC 10008, section 2>.
+--
+-- @since 0.13
+methodQuery :: Method
+methodQuery = renderStdMethod QUERY
+
 -- | HTTP standard method (as defined by RFC 2616, and PATCH which is defined
---   by RFC 5789).
+--   by RFC 5789, and QUERY which is defined by RFC 10008).
 --
 -- @since 0.2.0
 data StdMethod
@@ -104,6 +112,11 @@ data StdMethod
     | OPTIONS
     | -- | @since 0.8.0
       PATCH
+    | -- | QUERY as defined in
+      --   <https://www.rfc-editor.org/rfc/rfc10008.html#section-2 RFC 10008, section 2>.
+      --
+      -- @since 0.13
+      QUERY
     deriving
         ( Read
         , Show
@@ -154,3 +167,4 @@ renderStdMethod method =
         CONNECT -> "CONNECT"
         OPTIONS -> "OPTIONS"
         PATCH -> "PATCH"
+        QUERY -> "QUERY"
