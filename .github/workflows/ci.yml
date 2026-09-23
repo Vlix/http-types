@@ -29,7 +29,7 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-          - macOS-latest # Is giving issues for some reason
+          - macos-latest # Is giving issues for some reason
         cabal: ["3.16.1.0"] # we set a concrete cabal so we can cache correctly
         ghc:
           - "9.6.7"
@@ -208,8 +208,19 @@ jobs:
           restore-keys: |
             CI-deps-cache-${{ env.MANUAL_RESET }}-${{ matrix.resolver }}-
 
+      # This gets it's own build, since the test suite doesn't build on LTS-12
+      - name: Build dependencies lts-12 [no test suite]
+        if: matrix.resolver == 'lts-12' && steps.deps-cache.outputs.cache-hit != 'true'
+        id: deps-install-lts-12
+        run: |
+          stack build \
+            --system-ghc --no-terminal \
+            --resolver="${{ matrix.resolver }}" \
+            --only-dependencies \
+            --ghc-options='-j -Wall'
+
       - name: Build dependencies
-        if: steps.deps-cache.outputs.cache-hit != 'true'
+        if: matrix.resolver != 'lts-12' && steps.deps-cache.outputs.cache-hit != 'true'
         id: deps-install
         run: |
           stack build --test \
@@ -219,7 +230,7 @@ jobs:
             --ghc-options='-j -Wall'
 
       # This gets it's own build, since the test suite doesn't build on LTS-12
-      - name: Build lts-12
+      - name: Build lts-12 [no test suite]
         if: "${{ matrix.resolver == 'lts-12' }}"
         run: |
           stack build \
