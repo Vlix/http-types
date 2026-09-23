@@ -24,7 +24,6 @@ spec = do
         it "CONNECT" $ methodConnect `shouldBe` "CONNECT"
         it "OPTIONS" $ methodOptions `shouldBe` "OPTIONS"
         it "PATCH  " $ methodPatch `shouldBe` "PATCH"
-        it "QUERY  " $ methodQuery `shouldBe` "QUERY"
         it "StdMethod has all constants" $
             let methodList =
                     [ methodGet
@@ -36,13 +35,10 @@ spec = do
                     , methodConnect
                     , methodOptions
                     , methodPatch
-                    , methodQuery
                     ]
              in allMethods `shouldBe` methodList
 
     describe "parse/render method" $ do
-        it "parses QUERY as a standard method" $
-            parseMethod methodQuery `shouldBe` Right QUERY
         it "round trips" $ do
             renderMethod . parseMethod <$> allMethods `shouldBe` allMethods
         it "also round trips for any ByteString" $

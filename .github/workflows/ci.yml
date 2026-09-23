@@ -17,17 +17,20 @@ on:
 
 jobs:
   cabal:
-    env:
-      MANUAL_RESET: v5
     name: cabal / ghc-${{matrix.ghc}} / ${{ matrix.os }}
-    continue-on-error: ${{ matrix.ghc == '9.14.1'}}
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      MANUAL_RESET: "v5"
+    continue-on-error: ${{ matrix.ghc == '9.14.1' || matrix.os == 'macos-latest' }}
     strategy:
       matrix:
         os:
           - ubuntu-latest
-          # - macOS-latest # Is giving issues for some reason
-        cabal: ["latest"]
+          - macos-latest # Is giving issues for some reason
+        cabal: ["3.16.1.0"] # we set a concrete cabal so we can cache correctly
         ghc:
           - "9.6.7"
           - "9.8.4"
@@ -36,38 +39,61 @@ jobs:
           - "9.14.1"
 
     steps:
-      - uses: actions/checkout@v4
+      - name: "Set ENV / PATH"
+        id: env-vars
+        run: |
+          if [[ "${{ matrix.os }}" == 'macos-latest' ]]; then
+            echo "${HOME}/.ghcup/bin" >> $GITHUB_PATH
+          fi
+
+          echo "GHCUP_PATH=${HOME}/.ghcup" >> $GITHUB_ENV
+
+      - name: Clone Project
+        uses: actions/checkout@v6
 
       - name: Cache GHCup
         uses: actions/cache@v6
         id: ghcup-cache
         with:
           path: |
-            ~/.ghcup/bin/*
-            ~/.ghcup/cache/*
-            ~/.ghcup/config.yaml
-            ~/.ghcup/ghc/${{ matrix.ghc }}
-            ~/.ghcup/cabal/**/cabal
-          key: CI-ghcup-cabal-${{ env.MANUAL_RESET }}-${{ matrix.ghc }}
+            ${{ env.GHCUP_PATH }}/bin/*
+            ${{ env.GHCUP_PATH }}/cabal/${{ matrix.cabal }}/*
+            ${{ env.GHCUP_PATH }}/config.yaml
+            ${{ env.GHCUP_PATH }}/ghc/${{ matrix.ghc }}/bin
+            ${{ env.GHCUP_PATH }}/ghc/${{ matrix.ghc }}/lib
+          key: CI-ghcup-cabal-${{ env.MANUAL_RESET }}-${{ matrix.os }}-${{ matrix.ghc }}
 
       - name: Setup Haskell
-        if: steps.ghcup-cache.outputs.cache-hit != 'true'
         uses: haskell-actions/setup@v2
-        id: setup-haskell-cabal
+        if: steps.ghcup-cache.outputs.cache-hit != 'true'
+        id: ghcup-install
         with:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: ${{ matrix.cabal }}
-          cabal-update: true
 
-      - name: Cache cabal
-        uses: actions/cache@v6
+      - uses: actions/cache@v6
+        name: Cache cabal-store
+        id: deps-cache
         with:
           path: ~/.cabal
-          key: ${{ matrix.ghc }}-cabal
+          key: CI-deps-cache-${{ env.MANUAL_RESET }}-${{ matrix.os }}-${{ matrix.ghc }}
+
+      - name: Build Dependencies
+        if: steps.deps-cache.outputs.cache-hit != 'true'
+        id: build-deps
+        run: |
+          cabal update
+          cabal build all --only-dependencies \
+            --enable-tests --enable-benchmarks \
+            --write-ghc-environment-files=always \
+            --ghc-option='-Wall'
 
       - name: Build
         run: |
-          cabal build all --enable-tests --enable-benchmarks --write-ghc-environment-files=always --ghc-option='-Wall'
+          cabal build all \
+            --enable-tests --enable-benchmarks \
+            --write-ghc-environment-files=always \
+            --ghc-option='-Wall'
       - name: Test
         run: |
           cabal test test:spec --enable-tests --ghc-option='-Wall'
@@ -79,11 +105,12 @@ jobs:
     # - name: Bench
     #   run: |
     #     cabal bench --enable-benchmarks
+
   stack:
     name: stack ${{ matrix.resolver }}
+    runs-on: ubuntu-latest
     env:
       MANUAL_RESET: v3
-    runs-on: ubuntu-latest
     # This makes the CI jobs not all be cancelled if nightly fails to build.
     # However, if nightly fails to build, CI still gets a red X in the GitHub UI.
     # Ideally we want CI as a whole to pass even if nightly fails.
@@ -108,18 +135,32 @@ jobs:
             ghc: "9.12.4"
 
     steps:
-      - uses: actions/checkout@v4
+      - name: "Set ENV vars per LTS"
+        id: env-vars
+        run: |
+          STACK_ROOT="$HOME/.stack"
+          GHCUP_PATH="~/.ghcup"
+          GHCUP_GHC_PATH="${GHCUP_PATH}/ghc/${{ matrix.ghc }}"
+
+          # And then we expose these variables in the 'env'
+          echo "GHC_VERSION=$GHC_VERSION" >> $GITHUB_ENV
+          echo "GHCUP_PATH=$GHCUP_PATH" >> $GITHUB_ENV
+          echo "GHCUP_GHC_PATH=$GHCUP_GHC_PATH" >> $GITHUB_ENV
+          echo "STACK_ROOT=$STACK_ROOT" >> $GITHUB_ENV
+
+      - name: Clone project
+        uses: actions/checkout@v6
 
       - name: Cache GHCup
         uses: actions/cache@v6
         id: ghcup-cache
         with:
           path: |
-            ~/.ghcup/bin/*
-            ~/.ghcup/cache/*
-            ~/.ghcup/config.yaml
-            ~/.ghcup/ghc/${{ matrix.ghc }}
-            ~/.ghcup/stack/*
+            ${{ env.GHCUP_PATH }}/bin/*
+            ${{ env.GHCUP_PATH }}/config.yaml
+            ${{ env.GHCUP_GHC_PATH }}/bin
+            ${{ env.GHCUP_GHC_PATH }}/lib
+            ${{ env.GHCUP_PATH }}/stack/*
           key: CI-ghcup-stack-${{ env.MANUAL_RESET }}-${{ matrix.ghc }}
 
       - name: Setup Haskell Stack
@@ -132,44 +173,93 @@ jobs:
           stack-setup-ghc: false
 
       - name: Cache Pantry (Stackage package index)
-        id: pantry
-        uses: actions/cache@v6
-        with:
-          path: ~/.stack/pantry
-          key: CI-pantry-${{ env.MANUAL_RESET }}-${{ matrix.resolver }}
-
-      - name: Recompute Stackage package index
-        if: steps.pantry.outputs.cache-hit != 'true'
-        run: stack update # populates ~/.stack/pantry
-
-      - name: Cache Dependencies
+        id: pantry-cache
         uses: actions/cache@v6
         with:
           path: |
-            ~/.stack/stack.sqlite3
-            ~/.stack/snapshots
-          key: ${{ runner.os }}-${{ matrix.resolver }}-stack
+            ${{ env.STACK_ROOT }}/pantry
+            !${{ env.STACK_ROOT }}/pantry/hackage/00-index.tar
+            !${{ env.STACK_ROOT }}/pantry/hackage/00-index.tar.gz
+          key: CI-pantry-${{ env.MANUAL_RESET }}
 
-      - name: Build lts-12
+      - name: Recompute Stackage package index
+        if: steps.pantry-cache.outputs.cache-hit != 'true'
+        id: pantry-install
+        run: |
+          # Populates $STACK_ROOT/pantry
+          #
+          # The extra arguments are probably superfluous, but stack's caching
+          # is weird sometimes, so we keep everything equal when possible.
+          stack update \
+            --system-ghc --no-terminal \
+            --resolver="${{ matrix.resolver }}"
+
+      - name: Cache Dependencies
+        id: deps-cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ${{ env.STACK_ROOT }}/stack.sqlite3
+            ${{ env.STACK_ROOT }}/snapshots
+            #     [EXCLUDES]
+            # Don't cache any haddocks or other docs
+            !${{ env.STACK_ROOT }}/snapshots/**/doc
+          key: CI-deps-cache-${{ env.MANUAL_RESET }}-${{ matrix.resolver }}-${{ hashFiles('stack.yaml', 'http-types.cabal') }}
+          restore-keys: |
+            CI-deps-cache-${{ env.MANUAL_RESET }}-${{ matrix.resolver }}-
+
+      # This gets it's own build, since the test suite doesn't build on LTS-12
+      - name: Build dependencies lts-12 [no test suite]
+        if: matrix.resolver == 'lts-12' && steps.deps-cache.outputs.cache-hit != 'true'
+        id: deps-install-lts-12
+        run: |
+          stack build \
+            --system-ghc --no-terminal \
+            --resolver="${{ matrix.resolver }}" \
+            --only-dependencies \
+            --ghc-options='-j -Wall'
+
+      - name: Build dependencies
+        if: matrix.resolver != 'lts-12' && steps.deps-cache.outputs.cache-hit != 'true'
+        id: deps-install
+        run: |
+          stack build --test \
+            --system-ghc --no-terminal \
+            --resolver="${{ matrix.resolver }}" \
+            --only-dependencies --no-run-tests \
+            --ghc-options='-j -Wall'
+
+      # This gets it's own build, since the test suite doesn't build on LTS-12
+      - name: Build lts-12 [no test suite]
         if: "${{ matrix.resolver == 'lts-12' }}"
         run: |
-          stack config set system-ghc true --global
-          stack build --resolver=${{ matrix.resolver }} --ghc-options='-Wall'
+          stack build \
+            --system-ghc --no-terminal \
+            --resolver="${{ matrix.resolver }}" \
+            --ghc-options='-j -Wall'
 
       - name: Build
         if: "${{ matrix.resolver != 'lts-12' }}"
         run: |
-          stack config set system-ghc true --global
-          stack build --resolver=${{ matrix.resolver }} --test --bench \
-            --no-run-tests --no-run-benchmarks --ghc-options='-Wall'
+          stack build \
+            --system-ghc --no-terminal \
+            --resolver=${{ matrix.resolver }} \
+            --test --bench \
+            --no-run-tests --no-run-benchmarks \
+            --ghc-options='-Wall'
       - name: Test
         if: "${{ matrix.resolver != 'lts-12' }}"
         run: |
-          stack test --no-rerun-tests http-types:test:spec --resolver=${{ matrix.resolver }}
+          stack test http-types:test:spec \
+            --system-ghc --no-terminal \
+            --no-rerun-tests \
+            --resolver=${{ matrix.resolver }}
       - name: Test Docs
         if: "${{ matrix.resolver != 'lts-12' }}"
         run: |
-          stack test http-types:test:doctests --resolver=${{ matrix.resolver }}
+          stack test http-types:test:doctests \
+            --system-ghc --no-terminal \
+            --resolver=${{ matrix.resolver }}
 
     # # We probably want to add benchmarks at some point, just to make sure
     # # functions don't regress in performance too much?
